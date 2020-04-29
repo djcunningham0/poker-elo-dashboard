@@ -16,3 +16,13 @@ class PlayerCreationError(Error):
 class ScoreError(Error):
     """Raised when there is an issue with an expected or actual ELO score"""
     pass
+
+
+class PlottingError(Error):
+    """Raised when there is an error related to plotting"""
+    pass
+
+
+class DashStyleError(Error):
+    """Raised when there is an error relating to the style or layout of the dashboard"""
+    pass
