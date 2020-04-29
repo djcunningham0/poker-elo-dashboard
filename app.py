@@ -17,7 +17,7 @@ import elo
 parser = argparse.ArgumentParser()
 parser.add_argument('--debug', '-d', '--DEBUG', '-D', action='store_const', const=True,
                     help='Run in debug mode')
-args = parser.parse_args()
+args, _ = parser.parse_known_args()
 DEBUG = True if args.debug else False
 
 
