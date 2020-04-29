@@ -16,6 +16,8 @@ config = {
         'dbc_theme': 'FLATLY',  # others I liked: DARKLY, SIMPLEX, LUMEN (https://bootswatch.com/flatly/)
         'plotly_theme': 'plotly_white',
         'logo_path': '/assets/Red-Dog-Txt-&-Logo.jpg',
+        'github_logo_path': 'assets/GitHub-Mark-32px.png',
+        'github_url': 'https://github.com/djcunningham0/poker-ELO',
         'title': 'Red Dog Poker Network',
         'subtitle': 'Home of Uncommonly Smooth Poker',
         'current_elo_table_width': 5,

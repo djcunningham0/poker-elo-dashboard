@@ -25,7 +25,11 @@ DEBUG = True if args.debug else False
 pio.templates.default = config['dash']['plotly_theme']  # do this before creating any plots
 center_style = {'textAlign': 'center'}
 external_stylesheets = utils.get_dash_theme(config['dash']['dbc_theme'])
-logo = dbc.Col(dbc.CardImg(src=config['dash']['logo_path']), width=2)
+logo = dbc.CardImg(src=config['dash']['logo_path'])
+github_link = dbc.Row(align='center', form=True, justify='end', children=[
+    dbc.Col(html.Img(src=config['dash']['github_logo_path']), width='auto'),
+    dbc.Col(dbc.Button(children=['View on GitHub'], href=config['dash']['github_url'], color='primary', outline=True))
+])
 
 # load and preprocess data
 data = utils.load_data_from_gsheet(config)
@@ -42,12 +46,12 @@ server = app.server
 app.layout = dbc.Container(children=[
 
     dbc.Row(align='center', children=[
-        logo,
+        dbc.Col(logo, width=2),
         dbc.Col(children=[
             html.H1(children=config['dash']['title'], className='text-primary', style=center_style),
             html.H4(children=config['dash']['subtitle'], className='text-secondary', style=center_style),
         ]),
-        logo
+        dbc.Col(github_link, width='auto')
     ]),
 
     html.Hr(),
