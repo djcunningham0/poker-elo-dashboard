@@ -1,0 +1,8 @@
+venv/
+*.pyc
+.DS_Store
+.env
+.idea/
+.ipynb_checkpoints/
+__pycache__/
+*credentials.json

@@ -138,7 +138,7 @@ def prep_current_ratings_for_dash(tracker):
 
 
 def prep_history_plot_for_dash(tracker, title=None):
-    return tracker.plot_history(line=True, point=True).update_layout(title=title, title_x=0.5)
+    return tracker.plot_history().update_layout(title=title, title_x=0.5)
 
 
 def display_current_ratings_table(current_ratings, striped=True, bordered=True, hover=False, **kwargs):

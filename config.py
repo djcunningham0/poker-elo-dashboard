@@ -8,7 +8,7 @@ config = {
         'INITIAL_RATING': 1000
     },
     'google_sheets': {
-        'credentials_file': './google_sheets_credentials.json',
+        'credentials_file': './google-credentials.json',
         'spreadsheet_id': '1ZuEwqaBx4N_VX7nKGZ0nPcBilRLpvrQA00ddnrbEIOU',
         'data_sheet_id': 626646746
     },

@@ -37,6 +37,7 @@ history_plot = utils.prep_history_plot_for_dash(tracker)
 
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+server = app.server
 
 app.layout = dbc.Container(children=[
 

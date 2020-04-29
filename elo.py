@@ -2,10 +2,8 @@ from config import config
 import errors as e
 import numpy as np
 import pandas as pd
-from plotnine import *
 import plotly.express as px
 import score_functions as score
-from pandas.api.types import is_datetime64_any_dtype as is_datetime, is_string_dtype
 import utils
 
 
@@ -173,22 +171,10 @@ class Tracker:
 
         return history_df.reset_index(drop=True)
 
-    def plot_history(self, interactive=True, line=True, point=False, include_average=True,
-                     average_val=config['elo']['INITIAL_RATING']):
-        if not interactive:
-            return self._plot_history_static(line=line, point=point, include_average=include_average,
-                                             average_val=average_val)
-
-        if line and point:
-            mode = 'lines+markers'
-        elif line:
-            mode = 'lines'
-        elif point:
-            mode = 'markers'
-        else:
-            raise ValueError('one of line and point must be True')
+    def plot_history(self, include_points=True, include_average=True, average_val=config['elo']['INITIAL_RATING']):
         history_df = self.get_history_df()
         fig = px.line(history_df, x='date', y='rating', color='player_id')
+        mode = 'lines+markers' if include_points else 'lines'
         fig.update_traces(mode=mode)
         fig.update_layout(
             yaxis_title='ELO rating',
@@ -205,37 +191,6 @@ class Tracker:
                 line=dict(dash='dash', width=1.5)
             )])
         return fig
-
-    def _plot_history_static(self, line=True, point=False, include_average=True,
-                             average_val=config['elo']['INITIAL_RATING']):
-        if not (line or point):
-            raise ValueError('one of line and point must be True')
-
-        history_df = self.get_history_df()
-
-        # only numeric or datetime values will work with plotnine/ggplot plotting
-        if is_string_dtype(history_df['date']):
-            try:
-                history_df['date'] = pd.to_datetime(history_df['date'])
-            except ValueError:
-                raise e.PlottingError("Could not coerce 'date' column to datetime format")
-
-        p = (
-            ggplot(history_df, aes(x='date', y='rating', color='player_id'))
-            + labs(title='ELO history', y='ELO rating')
-        )
-        if line:
-            p += geom_line()
-        if point:
-            p += geom_point()
-        if include_average:
-            p += geom_hline(yintercept=average_val, linetype='dashed', alpha=0.5)
-
-        # rotate labels if they are dates because it looks better
-        if is_datetime(history_df['date']):
-            p += theme(axis_text_x=element_text(angle=90, hjust=1))
-
-        return p
 
     def retrieve_existing_player(self, player_id):
         if player_id in self.player_df['player_id'].tolist():
