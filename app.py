@@ -31,16 +31,9 @@ github_link = dbc.Row(align='center', form=True, justify='end', children=[
     dbc.Col(dbc.Button(children=['View on GitHub'], href=config['dash']['github_url'], color='primary', outline=True))
 ])
 
-# load and preprocess data
-data = utils.load_data_from_gsheet(config)
-tracker = elo.Tracker()
-tracker.process_data(data)
-results_history = utils.prep_results_history_for_dash(data)
-current_ratings = utils.prep_current_ratings_for_dash(tracker)
-history_plot = utils.prep_history_plot_for_dash(tracker)
-
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app.title = config['dash']['title']
 server = app.server
 
 app.layout = dbc.Container(children=[
@@ -56,36 +49,23 @@ app.layout = dbc.Container(children=[
 
     html.Hr(),
 
-    dbc.Row(children=[
-        dbc.Col(width=config['dash']['current_elo_table_width'], children=[
-            html.H4(children='Current ELO Ratings', style=center_style),
-            utils.display_current_ratings_table(current_ratings)
-        ]),
-        dbc.Col(width=config['dash']['elo_history_chart_width'], children=[
-            html.H4(children='ELO History', style=center_style),
-            dcc.Graph(id='elo-history', figure=history_plot)
-        ])
-    ]),
-
-    html.Hr(),
-
-    dbc.Row(children=[
-        dbc.Col(children=[
-            html.H4(children='Game Results', style=center_style),
-            utils.display_game_results_table(results_history)
-        ])
+    # load the data immediately after opening (this way the app loads a bit quicker)
+    dbc.Spinner(children=[
+        html.Div(id='hidden-trigger', hidden=True),
+        html.Div(id='original-data', hidden=True),
+        html.Div(id='main-content'),
     ]),
 
     html.Hr(),
 
     dbc.Row(justify='center', children=[
-        dbc.Button("Show/hide experimental content", id="collapse-button",color="primary")
+        dbc.Button('Show/hide experimental content', id='collapse-button', color='primary')
     ]),
 
     html.Br(),
 
     # I'd like to use dbc.Collapse instead of dbc.Fade but the chart doesn't render correctly
-    dbc.Fade(id="collapse", is_in=False, children=[
+    dbc.Fade(id='collapse', is_in=False, children=[
         dcc.Markdown(children="""
                      Edit ELO parameters and the game history to see how the ELO ratings would be affected.
                      """),
@@ -146,20 +126,14 @@ app.layout = dbc.Container(children=[
 
         html.Br(),
 
-        dbc.Row(justify='center', align='center', children=[
+        dcc.Loading(dbc.Row(justify='center', align='center', children=[
             dbc.Col(id='elo-history-table', width=config['dash']['current_elo_table_width']),
             dbc.Col(dcc.Graph(id='elo-history-chart'), width=config['dash']['elo_history_chart_width'])
-        ]),
+        ])),
 
         dbc.Row(justify='center', children=[
             dbc.Col(children=[
-                DataTable(
-                    id='adding-rows-table',
-                    columns=[{'id': col, 'name': col} for col in data.columns],
-                    data=data.to_dict('records'),
-                    editable=True,
-                    row_deletable=True
-                )
+                DataTable(id='editable-table', editable=True, row_deletable=True)
             ])
         ]),
 
@@ -176,6 +150,53 @@ app.layout = dbc.Container(children=[
 
 
 @app.callback(
+    Output('original-data', 'children'),
+    [Input('hidden-trigger', 'n_clicks')]
+)
+def load_original_data(n):
+    data = utils.load_data_from_gsheet(config)
+    return data.to_json()
+
+
+@app.callback(
+    Output('main-content', 'children'),
+    [Input('original-data', 'children')]
+)
+def load_main_content(json_data):
+    data = pd.read_json(json_data, convert_dates=False)
+    tracker = elo.Tracker()
+    tracker.process_data(data)
+    results_history = utils.prep_results_history_for_dash(data)
+    current_ratings = utils.prep_current_ratings_for_dash(tracker)
+    history_plot = utils.prep_history_plot_for_dash(tracker)
+
+    out = dbc.Container(children=[
+
+        dbc.Row(children=[
+            dbc.Col(width=config['dash']['current_elo_table_width'], children=[
+                html.H4(children='Current ELO Ratings', style=center_style),
+                utils.display_current_ratings_table(current_ratings)
+            ]),
+            dbc.Col(width=config['dash']['elo_history_chart_width'], children=[
+                html.H4(children='ELO History', style=center_style),
+                dcc.Graph(id='elo-history', figure=history_plot)
+            ])
+        ]),
+
+        html.Hr(),
+
+        dbc.Row(children=[
+            dbc.Col(children=[
+                html.H4(children='Game Results', style=center_style),
+                utils.display_game_results_table(results_history)
+            ])
+        ])
+    ])
+
+    return out
+
+
+@app.callback(
     Output("collapse", "is_in"),
     [Input("collapse-button", "n_clicks")],
     [State("collapse", "is_in")],
@@ -189,7 +210,7 @@ def toggle_collapse(n, is_in):
 @app.callback(
     [Output(component_id='elo-history-table', component_property='children'),
      Output(component_id='elo-history-chart', component_property='figure')],
-    [Input(component_id='adding-rows-table', component_property='data'),
+    [Input(component_id='editable-table', component_property='data'),
      Input(component_id='k-value', component_property='value'),
      Input(component_id='d-value', component_property='value'),
      Input(component_id='score-function-base', component_property='value'),
@@ -221,15 +242,25 @@ def update_chart_and_figure(tmp_data, k, d, base, scale_k):
 # push everything through at once, but it's trickier to set up that way. Leaving it for now because
 # the app seems to catch the errors and keep running.
 @app.callback(
-    Output('adding-rows-table', 'data'),
-    [Input('editing-rows-button', 'n_clicks')],
-    [State('adding-rows-table', 'data'),
-     State('adding-rows-table', 'columns')])
-def add_row(n_clicks, rows, columns):
-    if n_clicks > 0:
-        rows.append({c['id']: '' for c in columns})
-    return rows
+    [Output('editable-table', 'data'),
+     Output('editable-table', 'columns')],
+    [Input('editing-rows-button', 'n_clicks'),
+     Input('original-data', 'children')],
+    [State('editable-table', 'data'),
+     State('editable-table', 'columns')])
+def build_editable_table(n_clicks, orig_data, current_data, current_columns):
+    # when the app loads, use the original data
+    if n_clicks == 0:
+        df = pd.read_json(orig_data, convert_dates=False)
+        data = df.to_dict('records')
+        columns = [{'id': col, 'name': col} for col in df.columns]
 
+    # after that, add a new row whenever the button is clicked
+    else:
+        data = current_data + [{c['id']: '' for c in current_columns}]
+        columns = current_columns
+
+    return data, columns
 
 if __name__ == '__main__':
     app.run_server(debug=DEBUG)
