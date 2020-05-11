@@ -3,7 +3,7 @@ config = {
     'elo': {
         'DEFAULT_K_VALUE': 32,
         'DEFAULT_D_VALUE': 400,
-        'DEFAULT_SCORING_FUNCTION_BASE': 1.5,
+        'DEFAULT_SCORING_FUNCTION_BASE': 1.25,
         'DEFAULT_SCALE_K': True,
         'INITIAL_RATING': 1000
     },
