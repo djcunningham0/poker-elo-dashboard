@@ -237,10 +237,6 @@ def update_chart_and_figure(tmp_data, k, d, base, scale_k):
     return utils.display_current_ratings_table(tmp_ratings), tmp_fig
 
 
-# TODO: this setup can throw errors while you"re in the middle of editing a table, e.g., when
-# you"ve only entered one player so far. Would be better to have a "process updates" button to
-# push everything through at once, but it"s trickier to set up that way. Leaving it for now because
-# the app seems to catch the errors and keep running.
 @app.callback(
     [Output("editable-table", "data"),
      Output("editable-table", "columns")],
