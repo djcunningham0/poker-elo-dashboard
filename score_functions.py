@@ -7,7 +7,7 @@ def linear_score_function(n):
 
 def _exponential_score_template(n, base):
     if base < 1:
-        raise ValueError('base must be >= 1')
+        raise ValueError("base must be >= 1")
     if base == 1:
         return linear_score_function(n)  # it converges to this at base = 1
 

@@ -6,40 +6,12 @@ import errors as e
 import dash_bootstrap_components as dbc
 
 
-def try_dtype(x, dtype, return_on_error=None):
-    """
-    Change the type of on object if the new type is allowed.
-
-    Example:
-    > x = '1'
-    > try_dtype(x, int)  # returns 1 (an int)
-    > y = 'a'
-    > try_dtype(y, float)  # returns None
-    > try_dtype(y, float, return_on_error=y)  # returns 'a'
-
-    :param x: object to change type of
-    :param dtype: type to change to (e.g., int)
-    :param return_on_error: value to return if coercing to the new type is not allowed
-    :return: object with new type if allowed, otherwise the value passed into return_on_error
-    """
-    return dtype(x) if can_be_type(x, dtype) else return_on_error
-
-
-def try_dtype_or_raise_exception(x, dtype, message=None, error_type=TypeError):
-    if can_be_type(x, dtype):
-        return dtype(x)
-    else:
-        if message is None:
-            message = f'{x} cannot be coerced to {dtype}'
-        raise error_type(message)
-
-
 def raise_exception_if_not_type(x, dtype, error_type=TypeError, message=None):
     if isinstance(x, dtype):
         return x
     else:
         if message is None:
-            message = f'{x} is not an instance of {dtype}'
+            message = f"{x} is not an instance of {dtype}"
         raise error_type(message)
 
 
@@ -61,20 +33,21 @@ def can_be_type(x, dtype):
 
 
 def load_data_from_gsheet(config):
-    gc = set_up_gsheets_client(config['google_sheets']['credentials_file'])
-    spreadsheet = gc.open_by_key(config['google_sheets']['spreadsheet_id'])
-    data_sheet = get_worksheet_by_id(spreadsheet, config['google_sheets']['data_sheet_id'])
+    gc = set_up_gsheets_client(config["google_sheets"]["credentials_file"])
+    spreadsheet = gc.open_by_key(config["google_sheets"]["spreadsheet_id"])
+    data_sheet = get_worksheet_by_id(spreadsheet, config["google_sheets"]["data_sheet_id"])
     df = worksheet_to_dataframe(data_sheet)
     return df
 
 
 def set_up_gsheets_client(credentials_file):
-    scopes = ['https://spreadsheets.google.com/feeds',
-              'https://www.googleapis.com/auth/drive']
+    scopes = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
 
     credentials = Credentials.from_service_account_file(
-        filename=credentials_file,
-        scopes=scopes
+        filename=credentials_file, scopes=scopes
     )
 
     client = gspread.authorize(credentials)
@@ -86,7 +59,7 @@ def get_worksheet_by_id(spreadsheet, worksheet_id):
     try:
         return [w for w in spreadsheet.worksheets() if w.id == worksheet_id][0]
     except IndexError:
-        raise gspread.WorksheetNotFound(f'worksheet ID {worksheet_id} does not exist')
+        raise gspread.WorksheetNotFound(f"worksheet ID {worksheet_id} does not exist")
 
 
 def get_worksheet_by_name(spreadsheet, worksheet_name):
@@ -99,7 +72,7 @@ def worksheet_to_dataframe(worksheet, headers=True):
         columns = data[0]
         data = data[1:]
     else:
-        columns = ['col{0}'.format(i) for i in range(len(data[0]))]
+        columns = [f"col{i}" for i in range(len(data[0]))]
 
     df = pd.DataFrame(data, columns=columns)
     df = replace_null_string_with_nan(df)
@@ -108,7 +81,7 @@ def worksheet_to_dataframe(worksheet, headers=True):
 
 
 def replace_null_string_with_nan(df):
-    return df.replace('', np.nan)
+    return df.replace("", np.nan)
 
 
 def get_dash_theme(style):
@@ -120,20 +93,22 @@ def get_dash_theme(style):
 
 def prep_results_history_for_dash(data):
     results_history = data.copy()
-    results_history = results_history.dropna(how='all', axis=1)  # drop columns if all NaN
-    results_history = results_history.rename(columns={'date': 'Date'})
+    results_history = results_history.dropna(how="all", axis=1)  # drop columns if all NaN
+    results_history = results_history.rename(columns={"date": "Date"})
     return results_history
 
 
 def prep_current_ratings_for_dash(tracker):
     current_ratings = tracker.get_current_ratings()
-    current_ratings['rating'] = current_ratings['rating'].round(2)
-    current_ratings = current_ratings.rename(columns={
-        'rank': 'Rank',
-        'player_id': 'Name',
-        'n_games': 'Games Played',
-        'rating': 'ELO Rating'
-    })
+    current_ratings["rating"] = current_ratings["rating"].round(2)
+    current_ratings = current_ratings.rename(
+        columns={
+            "rank": "Rank",
+            "player_id": "Name",
+            "n_games": "Games Played",
+            "rating": "ELO Rating",
+        }
+    )
     return current_ratings
 
 
@@ -141,10 +116,12 @@ def prep_history_plot_for_dash(tracker, title=None):
     return tracker.plot_history().update_layout(title=title, title_x=0.5)
 
 
-def display_current_ratings_table(current_ratings, striped=True, bordered=True, hover=False, **kwargs):
-    return dbc.Table.from_dataframe(current_ratings, striped=striped, bordered=bordered, hover=hover, **kwargs)
+def display_current_ratings_table(
+    current_ratings, striped=True, bordered=True, hover=False, **kwargs
+):
+    table = dbc.Table.from_dataframe(current_ratings, striped=striped, bordered=bordered, hover=hover, **kwargs)
+    return table
 
 
 def display_game_results_table(results_history, hover=True, **kwargs):
     return dbc.Table.from_dataframe(results_history, hover=hover, **kwargs)
-
