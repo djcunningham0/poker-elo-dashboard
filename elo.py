@@ -8,9 +8,9 @@ import plotly.express as px
 import score_functions as score
 
 
-class MultiELO:
+class MultiElo:
     """
-    Generalized ELO for multiplayer matchups (also simplifies to standard ELO for 1-vs-1 matchups).
+    Generalized Elo for multiplayer matchups (also simplifies to standard Elo for 1-vs-1 matchups).
     Does not allow ties.
     """
 
@@ -22,10 +22,10 @@ class MultiELO:
         scale_k=config["elo"]["DEFAULT_SCALE_K"],
     ):
         """
-        :param k_value: K parameter in ELO algorithm that determines how much ratings increase or decrease
+        :param k_value: K parameter in Elo algorithm that determines how much ratings increase or decrease
         after each match
         :type k_value: float
-        :param d_value: D parameter in ELO algorithm that determines how much ELO difference affects win
+        :param d_value: D parameter in Elo algorithm that determines how much Elo difference affects win
         probability
         :type d_value: float
         :param score_function_base: base value to use for scoring function; scores are approximately
@@ -33,14 +33,13 @@ class MultiELO:
         which results in a linear scoring function)
         :type score_function_base: float
         :param scale_k: if True, use K * (number of players - 1) as the factor to determine change in
-        ELO rating; otherwise use K. When scale_k == True, players
+        Elo rating; otherwise use K. When scale_k == True, players
         :type scale_k: bool
+        :param regress_to_mean_factor: regress all players (active and inactive) towards this amount
         """
         self.k = k_value
         self.d = d_value
-        self._score_func = score.create_exponential_score_function(
-            base=score_function_base
-        )
+        self._score_func = score.create_exponential_score_function(base=score_function_base)
         self.scale_k = scale_k
 
     def get_new_ratings(self, initial_ratings):
@@ -129,8 +128,8 @@ class Player:
         :type player_id: str
         :param rating: player's current rating
         :type rating: float
-        :param rating_history: history of player's ratings (each entry is a (date, rating) tuple); if None, create
-        the first entry in the player's history
+        :param rating_history: history of player's ratings (each entry is a dict with keys for "date", "rating",
+        and boolean "game_result"); if None, create the first entry in the player's history
         :type rating_history: list
         :param date: date of this rating (e.g., player's first matchup date)
         :type date: str
@@ -139,11 +138,11 @@ class Player:
         self.rating = rating
         if rating_history is None:
             self.rating_history = []
-            self._update_rating_history(rating, date)
+            self._update_rating_history(rating, date, game_result=False)
         else:
             self.rating_history = rating_history
 
-    def update_rating(self, new_rating, date=None):
+    def update_rating(self, new_rating, date=None, game_result=True):
         """
         Update a player's rating and rating history. (updates the self.rating and self.rating_history attributes)
 
@@ -151,15 +150,62 @@ class Player:
         :type new_rating: float
         :param date: date the new rating was achieved
         :type date: str
+        :param game_result: if True, indicate that this entry reflects regression to the mean, not
+        the events of a matchup
+        :type game_result: bool
         """
         self.rating = new_rating
-        self._update_rating_history(new_rating, date)
+        self._update_rating_history(rating=new_rating, date=date, game_result=game_result)
+
+    def get_rating_as_of_date(self, date, default_rating=config["elo"]["INITIAL_RATING"]):
+        """
+        Retrieve a player's rating as of a specified date. Finds an entry in self.rating history for the latest
+        date less than or equal to the specified date. If there are multiple entries on that date, take the
+        one corresponding to a game result.
+
+        :param date: as-of-date to get a player's rating
+        :type date: str
+        :param default_rating: the default rating to return for dates before the earliest date in the player's
+        rating history (i.e., the default rating for new players)
+        :type default_rating: float
+
+        :return: player's rating as of the specified date
+        :rtype: float
+        """
+        history_df = DataFrame(self.rating_history)
+
+        # only select one entry per distinct date
+        history_df["r"] = history_df.groupby(["date"])["game_result"].rank(method="first", ascending=False)
+        history_df = history_df[history_df["r"] == 1]
+
+        # get the rating for the latest date
+        history_df = history_df[history_df["date"] <= date].sort_values("date", ascending=False)
+        if history_df.shape[0] == 0:
+            return default_rating
+        else:
+            return history_df.reset_index().loc[0, "rating"]
 
     def count_games(self):
-        return len(self.rating_history) - 1
+        """
+        Counts games played by this Player. Counts entries in self.rating history, excluding entries for
+        regression to the mean.
+        """
+        games_played = [x for x in self.rating_history if x["game_result"]]
+        return len(games_played)
 
-    def _update_rating_history(self, rating, date):
-        self.rating_history.append((date, rating))
+    def _update_rating_history(self, rating, date, game_result=True):
+        """
+        Update a player's rating history (self.rating_history)
+
+        :param rating: player's new rating effective on this date
+        :type rating: float
+        :param date: effective date for new rating
+        :type date: str
+        :param game_result: if True, indicate that this entry reflects the outcome of a game (i.e., not an initial
+        rating or a result of regression to the mean
+        :type game_result: bool
+        """
+        self.rating_history.append({"date": date, "rating": rating, "game_result": game_result})
 
     def __str__(self):
         return f"{self.id}: {round(self.rating, 2)} ({self.count_games()} games)"
@@ -183,23 +229,29 @@ class Player:
 class Tracker:
     def __init__(
         self,
-        elo_rater=MultiELO(),
+        elo_rater=MultiElo(),
         initial_rating=config["elo"]["INITIAL_RATING"],
         player_df=None,
+        regress_to_mean_factor=config['elo']['REGRESS_TO_MEAN_FACTOR'],
     ):
         """
         Instantiate a tracker that will track player's ratings over time as matchups occur.
 
         :param elo_rater:
-        :type elo_rater: MultiELO
+        :type elo_rater: MultiElo
         :param initial_rating: initial rating value for new players
         :type initial_rating: float
         :param player_df: dataframe of existing players. New players will be added to the dataframe when they
         appear in a matchup for the first time. If None, begin with no players in the dataframe.
         :type player_df: DataFrame
+        :param regress_to_mean_factor: regress all players' ratings to the mean (the initial player rating)
+        before each matchup by this factor. Details: take the player's rating before the matchup, then subtract
+        (new_score - mean_rating) * regress_to_mean_factor. If 0, scores are not regressed to the mean
+        :type regress_to_mean_factor: float
         """
         self.elo = elo_rater
-        self._initial_player_rating = initial_rating
+        self.initial_player_rating = initial_rating
+        self.regress_to_mean_factor = regress_to_mean_factor
 
         if player_df is None:
             player_df = DataFrame(columns=["player_id", "player"], dtype=object)
@@ -221,17 +273,18 @@ class Tracker:
         :param verbose: if True, print the details of all rating changes after processing each matchup
         :type verbose: bool
         """
-        matchup_history_df = matchup_history_df.sort_values(date_col).reset_index(
-            drop=True
-        )
+        matchup_history_df = matchup_history_df.sort_values(date_col).reset_index(drop=True)
         place_cols = [x for x in matchup_history_df.columns if x != date_col]
         matchup_history_df = matchup_history_df.dropna(how="all", axis=0, subset=place_cols)  # drop rows if all NaN
         for _, row in matchup_history_df.iterrows():
+            # first regress all players toward mean
             date = row[date_col]
+            self._regress_ratings_toward_mean(date, verbose=verbose)
+
+            # then get or create all players in the matchup and update their ratings
             players = [self._get_or_create_player(row[x]) for x in place_cols if not pd.isna(row[x])]
             initial_ratings = np.array([player.rating for player in players])
             new_ratings = self.elo.get_new_ratings(initial_ratings)
-
             for i, player in enumerate(players):
                 player.update_rating(new_ratings[i], date=date)
 
@@ -240,7 +293,6 @@ class Tracker:
                 out = f"{date}: "
                 for i, player in enumerate(players):
                     out += f"{player.id}: {round(initial_ratings[i], 2)} --> {round(player.rating, 2)}; "
-
                 print(out)
 
     def get_current_ratings(self):
@@ -265,14 +317,17 @@ class Tracker:
         :return: dataframe with all players' ratings on each date that they changed
         :rtype: DataFrame
         """
-        history_df = DataFrame(columns=["player_id", "date", "rating"])
+        history_df = DataFrame(columns=["player_id", "date", "rating", "game_result"])
+        history_df["rating"] = history_df["rating"].astype(float)
+        history_df["game_result"] = history_df["game_result"].astype(bool)
+
         players = [player for player in self.player_df["player"]]
         for player in players:
             # check if there are any missing dates after the first entry (the initial rating)
-            if any([x[0] is None for x in player.rating_history[1:]]):
+            if any([x["date"] is None for x in player.rating_history[1:]]):
                 print(f"WARNING: possible missing dates in history for Player {player.id}")
 
-            player_history_df = DataFrame(player.rating_history, columns=["date", "rating"])
+            player_history_df = DataFrame(player.rating_history)
             player_history_df = player_history_df[~player_history_df["date"].isna()]
             player_history_df["player_id"] = player.id
             history_df = pd.concat([history_df, player_history_df], sort=False)
@@ -299,12 +354,20 @@ class Tracker:
         :return: a plot generated using plotly.express.line
         """
         history_df = self.get_history_df()
+
+        # only plot one value per date -- if there is a game result and non-game result (e.g., regression toward
+        # the mean), plot the value after the game result
+        history_df["r"] = history_df.groupby(["player_id", "date"])["game_result"] \
+            .rank(method="first", ascending=False)
+        history_df = history_df[history_df["r"] == 1]
+
+        # create the plot
         fig = px.line(history_df, x="date", y="rating", color="player_id")
         mode = "lines+markers" if include_points else "lines"
         fig.update_traces(mode=mode)
         fig.update_layout(
-            yaxis_title="ELO rating",
-            title="ELO history",
+            yaxis_title="Elo rating",
+            title="Elo history",
             title_x=0.5,
             legend=dict(title="<b>Player</b>", y=0.5),
         )
@@ -358,7 +421,7 @@ class Tracker:
             )
 
         # create and add the player to the database
-        player = Player(player_id, rating=self._initial_player_rating)
+        player = Player(player_id, rating=self.initial_player_rating)
         add_df = DataFrame({"player_id": [player_id], "player": [player]})
         self.player_df = pd.concat([self.player_df, add_df])
         self._validate_player_df()
@@ -372,6 +435,20 @@ class Tracker:
             raise ValueError("The player column should contain Player objects")
 
         self.player_df = self.player_df.sort_values("player_id").reset_index(drop=True)
+
+    def _regress_ratings_toward_mean(self, date, verbose=False):
+        if self.regress_to_mean_factor == 0:
+            # no action needed if not regressing toward mean at all
+            pass
+
+        else:
+            for _, row in self.player_df.iterrows():
+                player = row["player"]
+                rating = player.get_rating_as_of_date(date)
+                regressed_rating = rating - self.regress_to_mean_factor * (rating - self.initial_player_rating)
+                player.update_rating(new_rating=regressed_rating, date=date, game_result=False)
+                if verbose:
+                    print(f"{date}: regressed {player.id} from {round(rating, 2)} to {round(regressed_rating, 2)}")
 
     def __repr__(self):
         return f"Tracker({self.player_df.shape[0]} total players)"

@@ -106,7 +106,7 @@ def prep_current_ratings_for_dash(tracker):
             "rank": "Rank",
             "player_id": "Name",
             "n_games": "Games Played",
-            "rating": "ELO Rating",
+            "rating": "Elo Rating",
         }
     )
     return current_ratings

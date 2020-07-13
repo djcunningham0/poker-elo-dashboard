@@ -67,22 +67,22 @@ app.layout = dbc.Container(children=[
     # I"d like to use dbc.Collapse instead of dbc.Fade but the chart doesn"t render correctly
     dbc.Fade(id="collapse", is_in=False, children=[
         dcc.Markdown(children="""
-                     Edit ELO parameters and the game history to see how the ELO ratings would be affected.
+                     Edit Elo parameters and the game history to see how the Elo ratings would be affected.
                      """),
 
         dcc.Markdown(className="text-muted",
                      children=f"""
-                     *K* controls how many ELO rating points are gained or lost in a single game. Larger
-                     *K* will result in larger changes after each game. This is a standard ELO parameter.
+                     *K* controls how many Elo rating points are gained or lost in a single game. Larger
+                     *K* will result in larger changes after each game. This is a standard Elo parameter.
                      (default = {config["elo"]["DEFAULT_K_VALUE"]})
                      """),
 
         dcc.Markdown(className="text-muted",
                      children=f"""
                      *D* controls the estimated win probability of each player. *D* value of 400 means
-                     that a player with a 200-point ELO advantage wins ~75% of the time in a head-to-head
+                     that a player with a 200-point Elo advantage wins ~75% of the time in a head-to-head
                      matchup. *D* value of 200 means that player wins ~90% of the time. This is a standard
-                     ELO parameter. (default = {config["elo"]["DEFAULT_D_VALUE"]})
+                     Elo parameter. (default = {config["elo"]["DEFAULT_D_VALUE"]})
                      """),
 
         dcc.Markdown(className="text-muted",
@@ -90,38 +90,54 @@ app.layout = dbc.Container(children=[
                      The score function base value controls how much more valuable it is to finish in a
                      high place. Larger value means greater reward for finishing near the top. A value of
                      *p* means that 1st place is worth approximately *p* times as much as 2nd, which is
-                     worth *p* times 3rd, and so on. This is a parameter I made up to generalize ELO to
+                     worth *p* times 3rd, and so on. This is a parameter I made up to generalize Elo to
                      multiplayer games. (default = {config["elo"]["DEFAULT_D_VALUE"]})
                      """),
 
         dcc.Markdown(className="text-muted",
                      children=f"""
-                     If "Scale *K* with # of players" is true, ELO ratings will change more after games
+                     If "Scale *K* with # of players" is true, Elo ratings will change more after games
                      with more players. The *K* value will be multiplied by the number of opposing players
-                     before calculating change in ELO. (default = {config["elo"]["DEFAULT_SCALE_K"]})
+                     before calculating change in Elo. (default = {config["elo"]["DEFAULT_SCALE_K"]})
+                     """),
+
+        dcc.Markdown(className="text-muted",
+                     children=f"""
+                     The regress-to-mean factor is used to regress scores toward the mean value after each
+                     matchup. The idea is that inactive players should not be able to stay at the top of the
+                     rankings. Larger value means more aggressive regression toward the mean, and a value of zero
+                     means no regression toward the mean. (default = {config["elo"]["REGRESS_TO_MEAN_FACTOR"]})
                      """),
 
         dbc.Row(justify="center", align="center", children=[
-            dbc.Col(dbc.InputGroup(children=[
+            dbc.Col(width=2, children=dbc.InputGroup(children=[
                 dbc.InputGroupAddon("K =", addon_type="prepend"),
                 dbc.Input(id="k-value", value=config["elo"]["DEFAULT_K_VALUE"],
                           type="number", min=0, step=16)
             ])),
-            dbc.Col(dbc.InputGroup(children=[
+            dbc.Col(width=2, children=dbc.InputGroup(children=[
                 dbc.InputGroupAddon("D =", addon_type="prepend"),
                 dbc.Input(id="d-value", value=config["elo"]["DEFAULT_D_VALUE"],
                           type="number", min=100, step=100)
             ])),
-            dbc.Col(dbc.InputGroup(children=[
+            dbc.Col(width=3, children=dbc.InputGroup(children=[
                 dbc.InputGroupAddon("score function base =", addon_type="prepend"),
                 dbc.Input(id="score-function-base", value=config["elo"]["DEFAULT_SCORING_FUNCTION_BASE"],
                           type="number", min=1, max=5, step=0.05)
             ])),
-            dbc.Col(dbc.InputGroup(children=[
+            dbc.Col(width=3, children=dbc.InputGroup(children=[
+                dbc.InputGroupAddon("regress-to-mean factor =", addon_type="prepend"),
+                dbc.Input(id="regress-to-mean-factor", value=config["elo"]["REGRESS_TO_MEAN_FACTOR"],
+                          type="number", min=0, max=1, step=0.01)
+            ])),
+            dbc.Col(width=2, children=dbc.InputGroup(children=[
                 dbc.Checklist(id="scale-k",
-                              options=[{"label": "Scale K with # of players", "value": 1}],
+                              options=[{"label": "scale K with # of players", "value": 1}],
                               value=[1] if config["elo"]["DEFAULT_SCALE_K"] else [])
             ]))
+        ]),
+        dbc.Row(justify="left", align="left", children=[
+
         ]),
 
         html.Br(),
@@ -174,11 +190,11 @@ def load_main_content(json_data):
 
         dbc.Row(children=[
             dbc.Col(width=config["dash"]["current_elo_table_width"], children=[
-                html.H4(children="Current ELO Ratings", style=center_style),
+                html.H4(children="Current Elo Ratings", style=center_style),
                 utils.display_current_ratings_table(current_ratings)
             ]),
             dbc.Col(width=config["dash"]["elo_history_chart_width"], children=[
-                html.H4(children="ELO History", style=center_style),
+                html.H4(children="Elo History", style=center_style),
                 dcc.Graph(id="elo-history", figure=history_plot)
             ])
         ]),
@@ -214,24 +230,25 @@ def toggle_collapse(n, is_in):
      Input(component_id="k-value", component_property="value"),
      Input(component_id="d-value", component_property="value"),
      Input(component_id="score-function-base", component_property="value"),
-     Input(component_id="scale-k", component_property="value")]
+     Input(component_id="scale-k", component_property="value"),
+     Input(component_id="regress-to-mean-factor", component_property="value")]
 )
-def update_chart_and_figure(tmp_data, k, d, base, scale_k):
+def update_chart_and_figure(tmp_data, k, d, base, scale_k, regress_to_mean_factor):
     # get data from editable table
     tmp_data = pd.DataFrame(tmp_data)
     tmp_data = utils.replace_null_string_with_nan(tmp_data)
 
-    # set up ELO tracker from editable parameters and process data
+    # set up Elo tracker from editable parameters and process data
     scale_k = True if len(scale_k) > 0 else False  # will either be [1] or []
-    elo_rater = elo.MultiELO(k_value=k, d_value=d, score_function_base=base, scale_k=scale_k)
-    tmp_tracker = elo.Tracker(elo_rater=elo_rater)
+    elo_rater = elo.MultiElo(k_value=k, d_value=d, score_function_base=base, scale_k=scale_k)
+    tmp_tracker = elo.Tracker(elo_rater=elo_rater, regress_to_mean_factor=regress_to_mean_factor)
     tmp_tracker.process_data(tmp_data)
 
     # get current ratings for table
     tmp_ratings = utils.prep_current_ratings_for_dash(tmp_tracker)
 
-    # get plot of ELO history
-    title = f"ELO history -- K={k}, D={d}, base={base}, scale_k={scale_k}"
+    # get plot of Elo history
+    title = f"Elo history -- K={k}, D={d}, base={base}, scale_k={scale_k}"
     tmp_fig = utils.prep_history_plot_for_dash(tmp_tracker, title=title)
 
     return utils.display_current_ratings_table(tmp_ratings), tmp_fig

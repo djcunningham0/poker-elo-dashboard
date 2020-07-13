@@ -14,7 +14,7 @@ class PlayerCreationError(Error):
 
 
 class ScoreError(Error):
-    """Raised when there is an issue with an expected or actual ELO score"""
+    """Raised when there is an issue with an expected or actual Elo score"""
     pass
 
 
