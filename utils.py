@@ -2,37 +2,16 @@ from google.oauth2.service_account import Credentials
 import gspread
 import pandas as pd
 import numpy as np
-import errors as e
 import dash_bootstrap_components as dbc
+import plotly.express as px
+from multielo import Tracker
+from gspread.client import Client
+from gspread.models import Spreadsheet, Worksheet
+from plotly.graph_objs import Figure
+from typing import List
 
 
-def raise_exception_if_not_type(x, dtype, error_type=TypeError, message=None):
-    if isinstance(x, dtype):
-        return x
-    else:
-        if message is None:
-            message = f"{x} is not an instance of {dtype}"
-        raise error_type(message)
-
-
-def can_be_type(x, dtype):
-    """
-    Determine whether an object can be coerced to the specified type.
-
-    :param x: object to change type of
-    :param dtype: type to change to (e.g., int)
-    :return: True if coercion is allowed, False otherwise
-    """
-    try:
-        dtype(x)
-        return True
-    except ValueError:
-        return False
-    except TypeError:
-        return False
-
-
-def load_data_from_gsheet(config):
+def load_data_from_gsheet(config: dict) -> pd.DataFrame:
     gc = set_up_gsheets_client(config["google_sheets"]["credentials_file"])
     spreadsheet = gc.open_by_key(config["google_sheets"]["spreadsheet_id"])
     data_sheet = get_worksheet_by_id(spreadsheet, config["google_sheets"]["data_sheet_id"])
@@ -40,7 +19,7 @@ def load_data_from_gsheet(config):
     return df
 
 
-def set_up_gsheets_client(credentials_file):
+def set_up_gsheets_client(credentials_file: str) -> Client:
     scopes = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -55,18 +34,18 @@ def set_up_gsheets_client(credentials_file):
     return client
 
 
-def get_worksheet_by_id(spreadsheet, worksheet_id):
+def get_worksheet_by_id(spreadsheet: Spreadsheet, worksheet_id: str) -> Worksheet:
     try:
         return [w for w in spreadsheet.worksheets() if w.id == worksheet_id][0]
     except IndexError:
         raise gspread.WorksheetNotFound(f"worksheet ID {worksheet_id} does not exist")
 
 
-def get_worksheet_by_name(spreadsheet, worksheet_name):
+def get_worksheet_by_name(spreadsheet: Spreadsheet, worksheet_name: str) -> Worksheet:
     return spreadsheet.worksheet(worksheet_name)
 
 
-def worksheet_to_dataframe(worksheet, headers=True):
+def worksheet_to_dataframe(worksheet: Worksheet, headers: bool = True) -> pd.DataFrame:
     data = worksheet.get_all_values()
     if headers:
         columns = data[0]
@@ -76,29 +55,28 @@ def worksheet_to_dataframe(worksheet, headers=True):
 
     df = pd.DataFrame(data, columns=columns)
     df = replace_null_string_with_nan(df)
-
     return df
 
 
-def replace_null_string_with_nan(df):
+def replace_null_string_with_nan(df: pd.DataFrame) -> pd.DataFrame:
     return df.replace("", np.nan)
 
 
-def get_dash_theme(style):
+def get_dash_theme(style: str) -> List[str]:
     try:
         return [getattr(dbc.themes, style)]
     except AttributeError:
-        raise e.DashStyleError(f"could not find theme named '{style}'")
+        raise AttributeError(f"could not find theme named '{style}'")
 
 
-def prep_results_history_for_dash(data):
+def prep_results_history_for_dash(data: pd.DataFrame) -> pd.DataFrame:
     results_history = data.copy()
     results_history = results_history.dropna(how="all", axis=1)  # drop columns if all NaN
     results_history = results_history.rename(columns={"date": "Date"})
     return results_history
 
 
-def prep_current_ratings_for_dash(tracker):
+def prep_current_ratings_for_dash(tracker: Tracker) -> pd.DataFrame:
     current_ratings = tracker.get_current_ratings()
     current_ratings["rating"] = current_ratings["rating"].round(2)
     current_ratings = current_ratings.rename(
@@ -112,16 +90,52 @@ def prep_current_ratings_for_dash(tracker):
     return current_ratings
 
 
-def prep_history_plot_for_dash(tracker, title=None):
-    return tracker.plot_history().update_layout(title=title, title_x=0.5)
+def plot_tracker_history(tracker: Tracker, title: str = None) -> Figure:
+    """
+    Create an interactive plot with the rating history of each player in the Tracker.
+
+    :param tracker: tracker with Elo history for all players
+    :type tracker: Tracker
+    :param title: title for the plot
+    :type title: str
+
+    :return: a plot generated using plotly.express.line
+    """
+    history_df = tracker.get_history_df()
+
+    fig = px.line(history_df, x="date", y="rating", color="player_id")
+    fig.update_traces(mode="lines+markers")
+    fig.update_layout(
+        yaxis_title="Elo rating",
+        title=title,
+        title_x=0.5,
+        legend=dict(title="<b>Player</b>", y=0.5),
+        # dashed line at average rating
+        shapes=[dict(
+            type="line",
+            yref="y",
+            y0=tracker.initial_player_rating,
+            y1=tracker.initial_player_rating,
+            xref="paper",
+            x0=0,
+            x1=1,
+            opacity=0.5,
+            line=dict(dash="dash", width=1.5),
+        )]
+    )
+    return fig
 
 
 def display_current_ratings_table(
-    current_ratings, striped=True, bordered=True, hover=False, **kwargs
-):
+    current_ratings: pd.DataFrame,
+    striped: bool = True,
+    bordered: bool = True,
+    hover: bool = False,
+    **kwargs
+) -> dbc.Table:
     table = dbc.Table.from_dataframe(current_ratings, striped=striped, bordered=bordered, hover=hover, **kwargs)
     return table
 
 
-def display_game_results_table(results_history, hover=True, **kwargs):
+def display_game_results_table(results_history: pd.DataFrame, hover: bool = True, **kwargs) -> dbc.Table:
     return dbc.Table.from_dataframe(results_history, hover=hover, **kwargs)

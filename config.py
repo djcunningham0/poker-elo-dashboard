@@ -4,9 +4,7 @@ config = {
         "DEFAULT_K_VALUE": 32,
         "DEFAULT_D_VALUE": 400,
         "DEFAULT_SCORING_FUNCTION_BASE": 1.25,
-        "DEFAULT_SCALE_K": True,
         "INITIAL_RATING": 1000,
-        "REGRESS_TO_MEAN_FACTOR": 0,
     },
     "google_sheets": {
         "credentials_file": "./google-credentials.json",
