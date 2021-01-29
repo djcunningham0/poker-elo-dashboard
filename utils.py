@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import dash_bootstrap_components as dbc
 import plotly.express as px
-from multielo import Tracker
+from multielo import MultiElo, Tracker
 from gspread.client import Client
 from gspread.models import Spreadsheet, Worksheet
 from plotly.graph_objs import Figure
@@ -90,20 +90,31 @@ def prep_current_ratings_for_dash(tracker: Tracker) -> pd.DataFrame:
     return current_ratings
 
 
-def plot_tracker_history(tracker: Tracker, title: str = None) -> Figure:
+def plot_tracker_history(
+    tracker: Tracker,
+    title: str = None,
+    equal_time_steps: bool = False,
+) -> Figure:
     """
     Create an interactive plot with the rating history of each player in the Tracker.
 
     :param tracker: tracker with Elo history for all players
-    :type tracker: Tracker
     :param title: title for the plot
-    :type title: str
+    :param equal_time_steps: if True, space the x-axis equally; otherwise use the provided timestamps.
 
     :return: a plot generated using plotly.express.line
     """
     history_df = tracker.get_history_df()
 
-    fig = px.line(history_df, x="date", y="rating", color="player_id")
+    if equal_time_steps:
+        date_df = history_df[["date"]].drop_duplicates().sort_values("date").reset_index(drop=True)
+        date_df["game number"] = date_df.index
+        history_df = history_df.merge(date_df, on="date", how="inner")
+        x_col = "game number"
+    else:
+        x_col = "date"
+
+    fig = px.line(history_df, x=x_col, y="rating", color="player_id")
     fig.update_traces(mode="lines+markers")
     fig.update_layout(
         yaxis_title="Elo rating",
@@ -139,3 +150,25 @@ def display_current_ratings_table(
 
 def display_game_results_table(results_history: pd.DataFrame, hover: bool = True, **kwargs) -> dbc.Table:
     return dbc.Table.from_dataframe(results_history, hover=hover, **kwargs)
+
+
+def get_tracker(
+    k_value: float,
+    d_value: float,
+    score_function_base: float,
+    initial_rating: float,
+    data_to_process: pd.DataFrame = None,
+) -> Tracker:
+    elo_rater = MultiElo(
+        k_value=k_value,
+        d_value=d_value,
+        score_function_base=score_function_base,
+    )
+    tracker = Tracker(elo_rater=elo_rater, initial_rating=initial_rating)
+    if data_to_process is not None:
+        tracker.process_data(data_to_process)
+    return tracker
+
+
+def load_json_data(json_data) -> pd.DataFrame:
+    return pd.read_json(json_data, convert_dates=False)

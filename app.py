@@ -2,6 +2,7 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
+import dash_daq as daq
 from dash_table import DataTable
 from dash.dependencies import Input, Output, State
 import plotly.io as pio
@@ -10,7 +11,6 @@ import argparse
 
 import utils
 from config import config
-from multielo import MultiElo, Tracker
 
 
 # determine if the script was run with any arguments
@@ -54,7 +54,39 @@ app.layout = dbc.Container(children=[
     dbc.Spinner(children=[
         html.Div(id="hidden-trigger", hidden=True),
         html.Div(id="original-data", hidden=True),
-        html.Div(id="main-content"),
+    ]),
+
+    dbc.Col(children=[
+        html.Div(children=[dbc.Container(children=[
+            dbc.Row(children=[
+                dbc.Col(width=config["dash"]["current_elo_table_width"], children=[
+                    html.H4(children="Current Elo Ratings", style=center_style),
+                    dbc.Spinner(id="current-ratings-table")
+                ]),
+                dbc.Col(
+                    width=config["dash"]["elo_history_chart_width"],
+                    children=[
+                        html.H4(children="Elo History", style=center_style),
+                        dbc.Spinner(children=dcc.Graph(id="main-chart")),
+                        dbc.Row(children=[
+                            daq.BooleanSwitch(id="time-step-toggle-input", on=True,
+                                              style={"margin-left": "20px", "margin-right": "10px"}),
+                            dcc.Markdown(className="text-muted",
+                                         children="use equally spaced time steps"),
+                            html.Div(id="time-step-null-output", hidden=True)
+                        ])
+                    ])
+            ]),
+
+            html.Hr(),
+
+            dbc.Row(children=[
+                dbc.Col(children=[
+                    html.H4(children="Game Results", style=center_style),
+                    dbc.Spinner(id="game-results-table")
+                ])
+            ])
+        ])]),
     ]),
 
     html.Hr(),
@@ -149,41 +181,43 @@ def load_original_data(_):
 
 
 @app.callback(
-    Output("main-content", "children"),
-    [Input("original-data", "children")]
+    [Output(component_id="current-ratings-table", component_property="children"),
+     Output(component_id="game-results-table", component_property="children")],
+    [Input(component_id="original-data", component_property="children")]
 )
-def load_main_content(json_data):
-    data = pd.read_json(json_data, convert_dates=False)
-    tracker = Tracker()
-    tracker.process_data(data)
-    results_history = utils.prep_results_history_for_dash(data)
+def load_main_tables(json_data):
+    data = utils.load_json_data(json_data)
+    tracker = utils.get_tracker(
+        k_value=config["elo"]["DEFAULT_K_VALUE"],
+        d_value=config["elo"]["DEFAULT_D_VALUE"],
+        score_function_base=config["elo"]["DEFAULT_SCORING_FUNCTION_BASE"],
+        initial_rating=config["elo"]["INITIAL_RATING"],
+        data_to_process=data,
+    )
     current_ratings = utils.prep_current_ratings_for_dash(tracker)  # TODO: add wins column
-    history_plot = utils.plot_tracker_history(tracker)
+    results_history = utils.prep_results_history_for_dash(data)
+    return (
+        utils.display_current_ratings_table(current_ratings),
+        utils.display_game_results_table(results_history)
+    )
 
-    out = dbc.Container(children=[
 
-        dbc.Row(children=[
-            dbc.Col(width=config["dash"]["current_elo_table_width"], children=[
-                html.H4(children="Current Elo Ratings", style=center_style),
-                utils.display_current_ratings_table(current_ratings)
-            ]),
-            dbc.Col(width=config["dash"]["elo_history_chart_width"], children=[
-                html.H4(children="Elo History", style=center_style),
-                dcc.Graph(id="elo-history", figure=history_plot)
-            ])
-        ]),
-
-        html.Hr(),
-
-        dbc.Row(children=[
-            dbc.Col(children=[
-                html.H4(children="Game Results", style=center_style),
-                utils.display_game_results_table(results_history)
-            ])
-        ])
-    ])
-
-    return out
+@app.callback(
+    Output(component_id="main-chart", component_property="figure"),
+    [Input(component_id="original-data", component_property="children"),
+     Input(component_id="time-step-toggle-input", component_property="on")]
+)
+def load_main_chart(json_data, equal_time_steps):
+    data = utils.load_json_data(json_data)
+    tracker = utils.get_tracker(
+        k_value=config["elo"]["DEFAULT_K_VALUE"],
+        d_value=config["elo"]["DEFAULT_D_VALUE"],
+        score_function_base=config["elo"]["DEFAULT_SCORING_FUNCTION_BASE"],
+        initial_rating=config["elo"]["INITIAL_RATING"],
+        data_to_process=data,
+    )
+    history_plot = utils.plot_tracker_history(tracker, equal_time_steps=equal_time_steps)
+    return history_plot
 
 
 @app.callback(
@@ -198,29 +232,46 @@ def toggle_collapse(n, is_in):
 
 
 @app.callback(
+    Output("time-step-null-output", "children"),
+    [Input("time-step-toggle-input", "on")]
+)
+def toggle_time_steps(value: bool) -> bool:
+    return value
+
+
+@app.callback(
     [Output(component_id="elo-history-table", component_property="children"),
      Output(component_id="elo-history-chart", component_property="figure")],
     [Input(component_id="editable-table", component_property="data"),
      Input(component_id="k-value", component_property="value"),
      Input(component_id="d-value", component_property="value"),
-     Input(component_id="score-function-base", component_property="value")]
+     Input(component_id="score-function-base", component_property="value"),
+     Input(component_id="time-step-toggle-input", component_property="on")]
 )
-def update_chart_and_figure(tmp_data, k, d, base):
+def update_chart_and_figure(tmp_data, k, d, base, equal_time_steps):
     # get data from editable table
     tmp_data = pd.DataFrame(tmp_data)
     tmp_data = utils.replace_null_string_with_nan(tmp_data)
 
     # set up Elo tracker from editable parameters and process data
-    elo_rater = MultiElo(k_value=k, d_value=d, score_function_base=base)
-    tmp_tracker = Tracker(elo_rater=elo_rater)
-    tmp_tracker.process_data(tmp_data)
+    tmp_tracker = utils.get_tracker(
+        k_value=k,
+        d_value=d,
+        score_function_base=base,
+        initial_rating=config["elo"]["INITIAL_RATING"],
+        data_to_process=tmp_data,
+    )
 
     # get current ratings for table
     tmp_ratings = utils.prep_current_ratings_for_dash(tmp_tracker)
 
     # get plot of Elo history
     title = f"Elo history -- K={k}, D={d}, base={base}"
-    tmp_fig = utils.plot_tracker_history(tmp_tracker, title=title)
+    tmp_fig = utils.plot_tracker_history(
+        tracker=tmp_tracker,
+        title=title,
+        equal_time_steps=equal_time_steps,
+    )
 
     return utils.display_current_ratings_table(tmp_ratings), tmp_fig
 
