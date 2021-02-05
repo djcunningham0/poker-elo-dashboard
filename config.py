@@ -10,6 +10,7 @@ config = {
         "credentials_file": "./google-credentials.json",
         "spreadsheet_id": "1ZuEwqaBx4N_VX7nKGZ0nPcBilRLpvrQA00ddnrbEIOU",
         "data_sheet_id": 626646746,
+        "dummy_player_name": "_dummy_",
     },
     "dash": {
         "dbc_theme": "FLATLY",  # others I liked: DARKLY, SIMPLEX, LUMEN (https://bootswatch.com/flatly/)

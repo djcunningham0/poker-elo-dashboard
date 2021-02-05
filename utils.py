@@ -76,9 +76,17 @@ def prep_results_history_for_dash(data: pd.DataFrame) -> pd.DataFrame:
     return results_history
 
 
-def prep_current_ratings_for_dash(tracker: Tracker) -> pd.DataFrame:
+def prep_current_ratings_for_dash(
+    tracker: Tracker,
+    dummy_player_id: str = None,
+) -> pd.DataFrame:
     current_ratings = tracker.get_current_ratings()
     current_ratings["rating"] = current_ratings["rating"].round(2)
+    current_ratings = remove_dummy_player(
+        df=current_ratings,
+        dummy_player_id=dummy_player_id,
+        column_name="player_id",
+    )
     current_ratings = current_ratings.rename(
         columns={
             "rank": "Rank",
@@ -94,17 +102,24 @@ def plot_tracker_history(
     tracker: Tracker,
     title: str = None,
     equal_time_steps: bool = False,
+    dummy_player_id: str = None,
 ) -> Figure:
     """
     Create an interactive plot with the rating history of each player in the Tracker.
 
     :param tracker: tracker with Elo history for all players
     :param title: title for the plot
-    :param equal_time_steps: if True, space the x-axis equally; otherwise use the provided timestamps.
+    :param equal_time_steps: if True, space the x-axis equally; otherwise use the provided timestamps
+    :param dummy_player_id: if specified, exclude player's with this ID from the chart
 
     :return: a plot generated using plotly.express.line
     """
     history_df = tracker.get_history_df()
+    history_df = remove_dummy_player(
+        df=history_df,
+        dummy_player_id=dummy_player_id,
+        column_name="player_id",
+    )
 
     if equal_time_steps:
         date_df = history_df[["date"]].drop_duplicates().sort_values("date").reset_index(drop=True)
@@ -174,3 +189,14 @@ def get_tracker(
 
 def load_json_data(json_data) -> pd.DataFrame:
     return pd.read_json(json_data, convert_dates=False)
+
+
+def remove_dummy_player(
+    df: pd.DataFrame,
+    dummy_player_id: str,
+    column_name: str,
+) -> pd.DataFrame:
+    if dummy_player_id is None:
+        return df
+    df = df[df[column_name] != dummy_player_id]
+    return df

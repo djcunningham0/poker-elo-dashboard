@@ -194,7 +194,11 @@ def load_main_tables(json_data):
         initial_rating=config["elo"]["INITIAL_RATING"],
         data_to_process=data,
     )
-    current_ratings = utils.prep_current_ratings_for_dash(tracker)  # TODO: add wins column
+    # TODO: add wins column
+    current_ratings = utils.prep_current_ratings_for_dash(
+        tracker=tracker,
+        dummy_player_id=config["google_sheets"]["dummy_player_name"],
+    )
     results_history = utils.prep_results_history_for_dash(data)
     return (
         utils.display_current_ratings_table(current_ratings),
@@ -216,7 +220,11 @@ def load_main_chart(json_data, equal_time_steps):
         initial_rating=config["elo"]["INITIAL_RATING"],
         data_to_process=data,
     )
-    history_plot = utils.plot_tracker_history(tracker, equal_time_steps=equal_time_steps)
+    history_plot = utils.plot_tracker_history(
+        tracker=tracker,
+        equal_time_steps=equal_time_steps,
+        dummy_player_id=config["google_sheets"]["dummy_player_name"],
+    )
     return history_plot
 
 
@@ -263,7 +271,10 @@ def update_chart_and_figure(tmp_data, k, d, base, equal_time_steps):
     )
 
     # get current ratings for table
-    tmp_ratings = utils.prep_current_ratings_for_dash(tmp_tracker)
+    tmp_ratings = utils.prep_current_ratings_for_dash(
+        tracker=tmp_tracker,
+        dummy_player_id=config["google_sheets"]["dummy_player_name"],
+    )
 
     # get plot of Elo history
     title = f"Elo history -- K={k}, D={d}, base={base}"
@@ -271,6 +282,7 @@ def update_chart_and_figure(tmp_data, k, d, base, equal_time_steps):
         tracker=tmp_tracker,
         title=title,
         equal_time_steps=equal_time_steps,
+        dummy_player_id=config["google_sheets"]["dummy_player_name"],
     )
 
     return utils.display_current_ratings_table(tmp_ratings), tmp_fig
