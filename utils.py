@@ -114,6 +114,8 @@ def plot_tracker_history(
     else:
         x_col = "date"
 
+    history_df = history_df.sort_values(["player_id", x_col]).reset_index(drop=True)
+
     fig = px.line(history_df, x=x_col, y="rating", color="player_id")
     fig.update_traces(mode="lines+markers")
     fig.update_layout(
