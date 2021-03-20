@@ -22,7 +22,7 @@ gspread==3.6.0
 gunicorn==20.0.4
 idna==2.10
 itsdangerous==1.1.0
-Jinja2==2.11.2
+Jinja2==2.11.3
 MarkupSafe==1.1.1
 multielo @ git+git://github.com/djcunningham0/multielo.git@9113470b33753fae59a229bd17f80296df0ae130
 numpy==1.19.1
