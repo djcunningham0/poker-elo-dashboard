@@ -78,23 +78,38 @@ def prep_results_history_for_dash(data: pd.DataFrame) -> pd.DataFrame:
     return results_history
 
 
-def prep_current_ratings_for_dash(tracker: Tracker) -> pd.DataFrame:
+def prep_current_ratings_for_dash(
+        tracker: Tracker,
+        results_history: pd.DataFrame,
+) -> pd.DataFrame:
     current_ratings = tracker.get_current_ratings()
     current_ratings["rating"] = current_ratings["rating"].round(2)
-    current_ratings = remove_dummy_player(
-        df=current_ratings,
-        dummy_player_id=config.DUMMY_PLAYER_NAME,
-        column_name="player_id",
-    )
-    current_ratings = current_ratings.rename(
-        columns={
+    win_df = get_wins_from_history(results_history)
+    current_ratings = (
+        remove_dummy_player(df=current_ratings)
+        .merge(win_df, on="player_id", how="left")
+        .fillna({"n_wins": 0})
+        .rename(columns={
             "rank": "Rank",
             "player_id": "Name",
             "n_games": "Games Played",
+            "n_wins": "Wins",
             "rating": "Elo Rating",
-        }
+        })
     )
-    return current_ratings
+    col_order = ["Rank", "Name", "Games Played", "Wins", "Elo Rating"]
+    return current_ratings[col_order]
+
+
+def get_wins_from_history(results_history: pd.DataFrame) -> pd.DataFrame():
+    return (
+        pd.DataFrame(results_history["1st"].value_counts())
+        .reset_index()
+        .rename(columns={
+            "index": "player_id",
+            "1st": "n_wins",
+        })
+    )
 
 
 def plot_tracker_history(
@@ -108,16 +123,11 @@ def plot_tracker_history(
     :param tracker: tracker with Elo history for all players
     :param title: title for the plot
     :param equal_time_steps: if True, space the x-axis equally; otherwise use the provided timestamps
-    :param dummy_player_id: if specified, exclude player's with this ID from the chart
 
     :return: a plot generated using plotly.express.line
     """
     history_df = tracker.get_history_df()
-    history_df = remove_dummy_player(
-        df=history_df,
-        dummy_player_id=config.DUMMY_PLAYER_NAME,
-        column_name="player_id",
-    )
+    history_df = remove_dummy_player(df=history_df)
 
     if equal_time_steps:
         date_df = history_df[["date"]].drop_duplicates().sort_values("date").reset_index(drop=True)
@@ -159,11 +169,21 @@ def display_current_ratings_table(
     hover: bool = False,
     **kwargs
 ) -> dbc.Table:
-    table = dbc.Table.from_dataframe(current_ratings, striped=striped, bordered=bordered, hover=hover, **kwargs)
+    table = dbc.Table.from_dataframe(
+        current_ratings,
+        striped=striped,
+        bordered=bordered,
+        hover=hover,
+        **kwargs
+    )
     return table
 
 
-def display_game_results_table(results_history: pd.DataFrame, hover: bool = True, **kwargs) -> dbc.Table:
+def display_game_results_table(
+        results_history: pd.DataFrame,
+        hover: bool = True,
+        **kwargs
+) -> dbc.Table:
     return dbc.Table.from_dataframe(results_history, hover=hover, **kwargs)
 
 
@@ -191,10 +211,9 @@ def load_json_data(json_data) -> pd.DataFrame:
 
 def remove_dummy_player(
     df: pd.DataFrame,
-    dummy_player_id: str,
-    column_name: str,
 ) -> pd.DataFrame:
+    dummy_player_id = config.DUMMY_PLAYER_NAME
     if dummy_player_id is None:
         return df
-    df = df[df[column_name] != dummy_player_id]
+    df = df[df["player_id"] != dummy_player_id]
     return df
