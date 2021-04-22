@@ -10,7 +10,7 @@ import pandas as pd
 import argparse
 
 import utils
-from config import config
+import config
 
 
 # determine if the script was run with any arguments
@@ -22,19 +22,19 @@ DEBUG = True if args.debug else False
 
 
 # set up styles to be used in UI
-pio.templates.default = config["dash"]["plotly_theme"]  # do this before creating any plots
+pio.templates.default = config.PLOTLY_THEME  # do this before creating any plots
 center_style = {"textAlign": "center"}
-external_stylesheets = utils.get_dash_theme(config["dash"]["dbc_theme"])
-logo = dbc.CardImg(src=config["dash"]["logo_path"])
+external_stylesheets = utils.get_dash_theme(config.DBC_THEME)
+logo = dbc.CardImg(src=config.LOGO_PATH)
 # TODO: make this open in a new tab
 github_link = dbc.Row(align="center", form=True, justify="end", children=[
-    dbc.Col(html.Img(src=config["dash"]["github_logo_path"]), width="auto"),
-    dbc.Col(dbc.Button(children=["View on GitHub"], href=config["dash"]["github_url"], color="primary", outline=True))
+    dbc.Col(html.Img(src=config.GITHUB_LOGO_PATH), width="auto"),
+    dbc.Col(dbc.Button(children=["View on GitHub"], href=config.GITHUB_URL, color="primary", outline=True))
 ])
 
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-app.title = config["dash"]["title"]
+app.title = config.TITLE
 server = app.server
 
 app.layout = dbc.Container(children=[
@@ -42,8 +42,8 @@ app.layout = dbc.Container(children=[
     dbc.Row(align="center", children=[
         dbc.Col(logo, width=2),
         dbc.Col(children=[
-            html.H1(children=config["dash"]["title"], className="text-primary", style=center_style),
-            html.H4(children=config["dash"]["subtitle"], className="text-secondary", style=center_style),
+            html.H1(children=config.TITLE, className="text-primary", style=center_style),
+            html.H4(children=config.SUBTITLE, className="text-secondary", style=center_style),
         ]),
         dbc.Col(github_link, width="auto")
     ]),
@@ -59,23 +59,21 @@ app.layout = dbc.Container(children=[
     dbc.Col(children=[
         html.Div(children=[dbc.Container(children=[
             dbc.Row(children=[
-                dbc.Col(width=config["dash"]["current_elo_table_width"], children=[
+                dbc.Col(width=5, children=[
                     html.H4(children="Current Elo Ratings", style=center_style),
                     dbc.Spinner(id="current-ratings-table")
                 ]),
-                dbc.Col(
-                    width=config["dash"]["elo_history_chart_width"],
-                    children=[
-                        html.H4(children="Elo History", style=center_style),
-                        dbc.Spinner(children=dcc.Graph(id="main-chart")),
-                        dbc.Row(children=[
-                            daq.BooleanSwitch(id="time-step-toggle-input", on=True,
-                                              style={"margin-left": "20px", "margin-right": "10px"}),
-                            dcc.Markdown(className="text-muted",
-                                         children="use equally spaced time steps"),
-                            html.Div(id="time-step-null-output", hidden=True)
-                        ])
+                dbc.Col(width=7, children=[
+                    html.H4(children="Elo History", style=center_style),
+                    dbc.Spinner(children=dcc.Graph(id="main-chart")),
+                    dbc.Row(children=[
+                        daq.BooleanSwitch(id="time-step-toggle-input", on=True,
+                                          style={"margin-left": "20px", "margin-right": "10px"}),
+                        dcc.Markdown(className="text-muted",
+                                     children="use equally spaced time steps"),
+                        html.Div(id="time-step-null-output", hidden=True)
                     ])
+                ])
             ]),
 
             html.Hr(),
@@ -107,7 +105,7 @@ app.layout = dbc.Container(children=[
                      children=f"""
                      *K* controls how many Elo rating points are gained or lost in a single game. Larger
                      *K* will result in larger changes after each game. This is a standard Elo parameter.
-                     (default = {config["elo"]["DEFAULT_K_VALUE"]})
+                     (default = {config.DEFAULT_K_VALUE})
                      """),
 
         dcc.Markdown(className="text-muted",
@@ -115,7 +113,7 @@ app.layout = dbc.Container(children=[
                      *D* controls the estimated win probability of each player. *D* value of 400 means
                      that a player with a 200-point Elo advantage wins ~75% of the time in a head-to-head
                      matchup. *D* value of 200 means that player wins ~90% of the time. This is a standard
-                     Elo parameter. (default = {config["elo"]["DEFAULT_D_VALUE"]})
+                     Elo parameter. (default = {config.DEFAULT_D_VALUE})
                      """),
 
         dcc.Markdown(className="text-muted",
@@ -124,23 +122,23 @@ app.layout = dbc.Container(children=[
                      high place. Larger value means greater reward for finishing near the top. A value of
                      *p* means that 1st place is worth approximately *p* times as much as 2nd, which is
                      worth *p* times 3rd, and so on. This is a parameter I made up to generalize Elo to
-                     multiplayer games. (default = {config["elo"]["DEFAULT_D_VALUE"]})
+                     multiplayer games. (default = {config.DEFAULT_SCORING_FUNCTION_BASE})
                      """),
 
         dbc.Row(justify="center", align="center", children=[
             dbc.Col(width=4, children=dbc.InputGroup(children=[
                 dbc.InputGroupAddon("K =", addon_type="prepend"),
-                dbc.Input(id="k-value", value=config["elo"]["DEFAULT_K_VALUE"],
+                dbc.Input(id="k-value", value=config.DEFAULT_K_VALUE,
                           type="number", min=0, step=16)
             ])),
             dbc.Col(width=4, children=dbc.InputGroup(children=[
                 dbc.InputGroupAddon("D =", addon_type="prepend"),
-                dbc.Input(id="d-value", value=config["elo"]["DEFAULT_D_VALUE"],
+                dbc.Input(id="d-value", value=config.DEFAULT_D_VALUE,
                           type="number", min=100, step=100)
             ])),
             dbc.Col(width=4, children=dbc.InputGroup(children=[
                 dbc.InputGroupAddon("score function base =", addon_type="prepend"),
-                dbc.Input(id="score-function-base", value=config["elo"]["DEFAULT_SCORING_FUNCTION_BASE"],
+                dbc.Input(id="score-function-base", value=config.DEFAULT_SCORING_FUNCTION_BASE,
                           type="number", min=1, max=5, step=0.05)
             ])),
         ]),
@@ -149,8 +147,8 @@ app.layout = dbc.Container(children=[
         html.Br(),
 
         dcc.Loading(dbc.Row(justify="center", align="center", children=[
-            dbc.Col(id="elo-history-table", width=config["dash"]["current_elo_table_width"]),
-            dbc.Col(dcc.Graph(id="elo-history-chart"), width=config["dash"]["elo_history_chart_width"])
+            dbc.Col(id="elo-history-table", width=5),
+            dbc.Col(dcc.Graph(id="elo-history-chart"), width=7)
         ])),
 
         dbc.Row(justify="center", children=[
@@ -176,7 +174,7 @@ app.layout = dbc.Container(children=[
     [Input("hidden-trigger", "n_clicks")]
 )
 def load_original_data(_):
-    data = utils.load_data_from_gsheet(config)
+    data = utils.load_data_from_gsheet()
     return data.to_json()
 
 
@@ -188,17 +186,14 @@ def load_original_data(_):
 def load_main_tables(json_data):
     data = utils.load_json_data(json_data)
     tracker = utils.get_tracker(
-        k_value=config["elo"]["DEFAULT_K_VALUE"],
-        d_value=config["elo"]["DEFAULT_D_VALUE"],
-        score_function_base=config["elo"]["DEFAULT_SCORING_FUNCTION_BASE"],
-        initial_rating=config["elo"]["INITIAL_RATING"],
+        k_value=config.DEFAULT_K_VALUE,
+        d_value=config.DEFAULT_D_VALUE,
+        score_function_base=config.DEFAULT_SCORING_FUNCTION_BASE,
+        initial_rating=config.INITIAL_RATING,
         data_to_process=data,
     )
     # TODO: add wins column
-    current_ratings = utils.prep_current_ratings_for_dash(
-        tracker=tracker,
-        dummy_player_id=config["google_sheets"]["dummy_player_name"],
-    )
+    current_ratings = utils.prep_current_ratings_for_dash(tracker=tracker)
     results_history = utils.prep_results_history_for_dash(data)
     return (
         utils.display_current_ratings_table(current_ratings),
@@ -214,16 +209,15 @@ def load_main_tables(json_data):
 def load_main_chart(json_data, equal_time_steps):
     data = utils.load_json_data(json_data)
     tracker = utils.get_tracker(
-        k_value=config["elo"]["DEFAULT_K_VALUE"],
-        d_value=config["elo"]["DEFAULT_D_VALUE"],
-        score_function_base=config["elo"]["DEFAULT_SCORING_FUNCTION_BASE"],
-        initial_rating=config["elo"]["INITIAL_RATING"],
+        k_value=config.DEFAULT_K_VALUE,
+        d_value=config.DEFAULT_D_VALUE,
+        score_function_base=config.DEFAULT_SCORING_FUNCTION_BASE,
+        initial_rating=config.INITIAL_RATING,
         data_to_process=data,
     )
     history_plot = utils.plot_tracker_history(
         tracker=tracker,
         equal_time_steps=equal_time_steps,
-        dummy_player_id=config["google_sheets"]["dummy_player_name"],
     )
     return history_plot
 
@@ -266,15 +260,12 @@ def update_chart_and_figure(tmp_data, k, d, base, equal_time_steps):
         k_value=k,
         d_value=d,
         score_function_base=base,
-        initial_rating=config["elo"]["INITIAL_RATING"],
+        initial_rating=config.INITIAL_RATING,
         data_to_process=tmp_data,
     )
 
     # get current ratings for table
-    tmp_ratings = utils.prep_current_ratings_for_dash(
-        tracker=tmp_tracker,
-        dummy_player_id=config["google_sheets"]["dummy_player_name"],
-    )
+    tmp_ratings = utils.prep_current_ratings_for_dash(tracker=tmp_tracker)
 
     # get plot of Elo history
     title = f"Elo history -- K={k}, D={d}, base={base}"
@@ -282,7 +273,6 @@ def update_chart_and_figure(tmp_data, k, d, base, equal_time_steps):
         tracker=tmp_tracker,
         title=title,
         equal_time_steps=equal_time_steps,
-        dummy_player_id=config["google_sheets"]["dummy_player_name"],
     )
 
     return utils.display_current_ratings_table(tmp_ratings), tmp_fig
