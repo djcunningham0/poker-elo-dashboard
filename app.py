@@ -223,7 +223,6 @@ def win_probability_tab():
         ]),
     ])
 
-
 @app.callback(
     Output(component_id="tab-content", component_property="children"),
     Input(component_id="tab-name", component_property="value")
