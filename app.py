@@ -7,6 +7,8 @@ from dash_table import DataTable
 from dash.dependencies import Input, Output, State
 import plotly.io as pio
 import pandas as pd
+from multielo import MultiElo
+
 import argparse
 from typing import List
 
@@ -202,6 +204,26 @@ def scenario_generator_tab():
     ])
 
 
+def win_probability_tab():
+    return html.Div(children=[
+        dbc.Row(children=[
+            dbc.Col(width=3, children=[
+                section_header("Player List"),
+                dcc.Markdown(className="text-muted",
+                             children="Select which players will participate."),
+                dbc.Checklist(id="player-options", value=[]),
+                html.Br(),
+                dbc.Button(id="clear-button", children="Clear selections", color="primary")
+            ]),
+
+            dbc.Col(width=9, children=[
+                section_header("Probability of Results"),
+                html.Div(id="win-probability-table")
+            ])
+        ]),
+    ])
+
+
 @app.callback(
     Output(component_id="tab-content", component_property="children"),
     Input(component_id="tab-name", component_property="value")
@@ -211,6 +233,8 @@ def render_content(tab_name: str):
         return current_elo_tab()
     elif tab_name == "tab-2":
         return scenario_generator_tab()
+    elif tab_name == "tab-3":
+        return win_probability_tab()
 
 
 app.layout = dbc.Container(children=[
@@ -226,6 +250,7 @@ app.layout = dbc.Container(children=[
     dcc.Tabs(id="tab-name", value="tab-1", children=[
         dcc.Tab(label="Current Elo Ratings", value="tab-1"),
         dcc.Tab(label='"What-If" Scenario Generator', value="tab-2"),
+        dcc.Tab(label="Win Probabilities", value="tab-3"),
     ]),
 
     html.Br(),
@@ -381,6 +406,69 @@ def build_editable_table(
         columns = current_columns
 
     return data, columns
+
+
+@app.callback(
+    Output(component_id="player-options", component_property="options"),
+    Input(component_id="original-data", component_property="children")
+)
+def get_player_options(json_data: List[dict]):
+    data = utils.load_json_data(json_data)
+    tracker = utils.get_tracker(
+        k_value=config.DEFAULT_K_VALUE,
+        d_value=config.DEFAULT_D_VALUE,
+        score_function_base=config.DEFAULT_SCORING_FUNCTION_BASE,
+        initial_rating=config.INITIAL_RATING,
+        data_to_process=data,
+    )
+    player_df = tracker.player_df
+    player_df = utils.remove_dummy_player(player_df)
+    return [{"label": f"{player.id} (rating = {player.rating:.2f})", "value": (player.id, player.rating)}
+            for player in player_df["player"]]
+
+
+@app.callback(
+    Output(component_id="player-options", component_property="value"),
+    Input(component_id="clear-button", component_property="n_clicks")
+)
+def clear_selection(_):
+    return []
+
+
+@app.callback(
+    Output(component_id="win-probability-table", component_property="children"),
+    Input(component_id="player-options", component_property="value")
+)
+def create_win_probability_table(players: List[tuple]):
+    if not players:
+        return None
+
+    n_players = len(players)
+    player_ids = [x[0] for x in players]
+    ratings = [x[1] for x in players]
+
+    elo = MultiElo(
+        k_value=config.DEFAULT_K_VALUE,
+        d_value=config.DEFAULT_D_VALUE,
+        score_function_base=config.DEFAULT_SCORING_FUNCTION_BASE,
+    )
+
+    result_mx = elo.simulate_win_probabilities(ratings, n_sim=int(1e5), seed=0)
+    df = pd.DataFrame(result_mx)
+
+    df["Player"] = player_ids
+
+    place_cols = [utils.make_ordinal(x + 1) for x in range(n_players)]
+    rename_dict = dict(zip(range(n_players), place_cols))
+    df = df.rename(columns=rename_dict)
+    df = df[["Player", *[x for x in df.columns if x != "Player"]]]
+    df = df.apply(lambda row: [f"{x:.1%}" if isinstance(x, float) else x for x in row])
+
+    return dbc.Table.from_dataframe(
+        df,
+        bordered=True,
+        striped=True,
+    )
 
 
 if __name__ == "__main__":
