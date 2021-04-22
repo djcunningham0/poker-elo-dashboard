@@ -8,6 +8,7 @@ from dash.dependencies import Input, Output, State
 import plotly.io as pio
 import pandas as pd
 import argparse
+from typing import List
 
 import utils
 import config
@@ -25,78 +26,74 @@ DEBUG = True if args.debug else False
 pio.templates.default = config.PLOTLY_THEME  # do this before creating any plots
 center_style = {"textAlign": "center"}
 external_stylesheets = utils.get_dash_theme(config.DBC_THEME)
-logo = dbc.CardImg(src=config.LOGO_PATH)
-# TODO: make this open in a new tab
-github_link = dbc.Row(align="center", form=True, justify="end", children=[
-    dbc.Col(html.Img(src=config.GITHUB_LOGO_PATH), width="auto"),
-    dbc.Col(dbc.Button(children=["View on GitHub"], href=config.GITHUB_URL, color="primary", outline=True))
-])
 
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 app.title = config.TITLE
 server = app.server
+app.config["suppress_callback_exceptions"] = True
 
-app.layout = dbc.Container(children=[
 
-    dbc.Row(align="center", children=[
-        dbc.Col(logo, width=2),
-        dbc.Col(children=[
-            html.H1(children=config.TITLE, className="text-primary", style=center_style),
-            html.H4(children=config.SUBTITLE, className="text-secondary", style=center_style),
+def header():
+    logo = dbc.CardImg(src=config.LOGO_PATH)
+    # TODO: make GitHub link open in a new tab
+    github_link = dbc.Row(align="center", form=True, justify="end", children=[
+        dbc.Col(html.Img(src=config.GITHUB_LOGO_PATH), width="auto"),
+        dbc.Col(dbc.Button(children=["View on GitHub"], href=config.GITHUB_URL, color="primary", outline=True))
+    ])
+
+    return html.Div([
+        dbc.Row(align="center", children=[
+            dbc.Col(logo, width=2),
+            dbc.Col(children=[
+                html.H1(children=config.TITLE, className="text-primary", style=center_style),
+                html.H4(children=config.SUBTITLE, className="text-secondary", style=center_style),
+            ]),
+            dbc.Col(github_link, width="auto")
         ]),
-        dbc.Col(github_link, width="auto")
-    ]),
+        html.Hr(),
+    ])
 
-    html.Hr(),
 
-    # load the data immediately after opening (this way the app loads a bit quicker)
-    dbc.Spinner(children=[
-        html.Div(id="hidden-trigger", hidden=True),
-        html.Div(id="original-data", hidden=True),
-    ]),
-
-    dbc.Col(children=[
-        html.Div(children=[dbc.Container(children=[
-            dbc.Row(children=[
-                dbc.Col(width=5, children=[
-                    html.H4(children="Current Elo Ratings", style=center_style),
-                    dbc.Spinner(id="current-ratings-table")
+def current_elo_tab():
+    return html.Div(children=[
+        dbc.Col(children=[
+            html.Div(children=[dbc.Container(children=[
+                dbc.Row(children=[
+                    dbc.Col(width=5, children=[
+                        html.H4(children="Current Elo Ratings", style=center_style),
+                        dbc.Spinner(id="current-ratings-table")
+                    ]),
+                    dbc.Col(width=7, children=[
+                        html.H4(children="Elo History", style=center_style),
+                        dbc.Spinner(children=dcc.Graph(id="main-chart")),
+                        dbc.Row(children=[
+                            daq.BooleanSwitch(id="time-step-toggle-input", on=True,
+                                              style={"margin-left": "20px", "margin-right": "10px"}),
+                            dcc.Markdown(className="text-muted",
+                                         children="use equally spaced time steps"),
+                            html.Div(id="time-step-null-output", hidden=True)
+                        ])
+                    ])
                 ]),
-                dbc.Col(width=7, children=[
-                    html.H4(children="Elo History", style=center_style),
-                    dbc.Spinner(children=dcc.Graph(id="main-chart")),
-                    dbc.Row(children=[
-                        daq.BooleanSwitch(id="time-step-toggle-input", on=True,
-                                          style={"margin-left": "20px", "margin-right": "10px"}),
-                        dcc.Markdown(className="text-muted",
-                                     children="use equally spaced time steps"),
-                        html.Div(id="time-step-null-output", hidden=True)
+
+                html.Hr(),
+
+                dbc.Row(children=[
+                    dbc.Col(children=[
+                        html.H4(children="Game Results", style=center_style),
+                        dbc.Spinner(id="game-results-table")
                     ])
                 ])
-            ]),
+            ])]),
+        ]),
 
-            html.Hr(),
+        html.Hr(),
+    ])
 
-            dbc.Row(children=[
-                dbc.Col(children=[
-                    html.H4(children="Game Results", style=center_style),
-                    dbc.Spinner(id="game-results-table")
-                ])
-            ])
-        ])]),
-    ]),
 
-    html.Hr(),
-
-    dbc.Row(justify="center", children=[
-        dbc.Button("Show/hide experimental content", id="collapse-button", color="primary")
-    ]),
-
-    html.Br(),
-
-    # I"d like to use dbc.Collapse instead of dbc.Fade but the chart doesn't render correctly
-    dbc.Fade(id="collapse", is_in=False, children=[
+def scenario_generator_tab():
+    return html.Div([
         dcc.Markdown(children="""
                      Edit Elo parameters and the game history to see how the Elo ratings would be affected.
                      """),
@@ -143,12 +140,20 @@ app.layout = dbc.Container(children=[
             ])),
         ]),
 
-        dbc.Row(justify="left", align="left", children=[]),
         html.Br(),
 
-        dcc.Loading(dbc.Row(justify="center", align="center", children=[
-            dbc.Col(id="elo-history-table", width=5),
-            dbc.Col(dcc.Graph(id="elo-history-chart"), width=7)
+        dcc.Loading(dbc.Row(justify="center", align="start", children=[
+            dbc.Col(id="elo-scenario-table", width=5),
+            dbc.Col(width=7, children=[
+                dcc.Graph(id="elo-scenario-chart"),
+                dbc.Row(children=[
+                    daq.BooleanSwitch(id="time-step-toggle-input", on=True,
+                                      style={"margin-left": "20px", "margin-right": "10px"}),
+                    dcc.Markdown(className="text-muted",
+                                 children="use equally spaced time steps"),
+                    html.Div(id="time-step-null-output", hidden=True)
+                ])
+            ]),
         ])),
 
         dbc.Row(justify="center", children=[
@@ -166,6 +171,37 @@ app.layout = dbc.Container(children=[
             )
         ])
     ])
+
+
+@app.callback(
+    Output(component_id="tab-content", component_property="children"),
+    Input(component_id="tab-name", component_property="value")
+)
+def render_content(tab_name: str):
+    if tab_name == "tab-1":
+        return current_elo_tab()
+    elif tab_name == "tab-2":
+        return scenario_generator_tab()
+
+
+app.layout = dbc.Container(children=[
+
+    header(),
+
+    # load the data immediately after opening (this way the app loads a bit quicker)
+    dbc.Spinner(children=[
+        html.Div(id="hidden-trigger", hidden=True),
+        html.Div(id="original-data", hidden=True),
+    ]),
+
+    dcc.Tabs(id="tab-name", value="tab-1", children=[
+        dcc.Tab(label="Current Elo Ratings", value="tab-1"),
+        dcc.Tab(label='"What-If" Scenario Generator', value="tab-2"),
+    ]),
+
+    html.Br(),
+    html.Div(id="tab-content"),
+
 ])
 
 
@@ -183,7 +219,7 @@ def load_original_data(_):
      Output(component_id="game-results-table", component_property="children")],
     [Input(component_id="original-data", component_property="children")]
 )
-def load_main_tables(json_data):
+def load_current_elo_tables(json_data):
     data = utils.load_json_data(json_data)
     tracker = utils.get_tracker(
         k_value=config.DEFAULT_K_VALUE,
@@ -206,7 +242,7 @@ def load_main_tables(json_data):
     [Input(component_id="original-data", component_property="children"),
      Input(component_id="time-step-toggle-input", component_property="on")]
 )
-def load_main_chart(json_data, equal_time_steps):
+def load_current_elo_chart(json_data, equal_time_steps):
     data = utils.load_json_data(json_data)
     tracker = utils.get_tracker(
         k_value=config.DEFAULT_K_VALUE,
@@ -223,17 +259,6 @@ def load_main_chart(json_data, equal_time_steps):
 
 
 @app.callback(
-    Output("collapse", "is_in"),
-    [Input("collapse-button", "n_clicks")],
-    [State("collapse", "is_in")],
-)
-def toggle_collapse(n, is_in):
-    if n:
-        return not is_in
-    return is_in
-
-
-@app.callback(
     Output("time-step-null-output", "children"),
     [Input("time-step-toggle-input", "on")]
 )
@@ -242,15 +267,21 @@ def toggle_time_steps(value: bool) -> bool:
 
 
 @app.callback(
-    [Output(component_id="elo-history-table", component_property="children"),
-     Output(component_id="elo-history-chart", component_property="figure")],
+    [Output(component_id="elo-scenario-table", component_property="children"),
+     Output(component_id="elo-scenario-chart", component_property="figure")],
     [Input(component_id="editable-table", component_property="data"),
      Input(component_id="k-value", component_property="value"),
      Input(component_id="d-value", component_property="value"),
      Input(component_id="score-function-base", component_property="value"),
      Input(component_id="time-step-toggle-input", component_property="on")]
 )
-def update_chart_and_figure(tmp_data, k, d, base, equal_time_steps):
+def update_scenario_generator_chart_and_figure(
+        tmp_data: List[dict],
+        k: float,
+        d: float,
+        base: float,
+        equal_time_steps: bool,
+):
     # get data from editable table
     tmp_data = pd.DataFrame(tmp_data)
     tmp_data = utils.replace_null_string_with_nan(tmp_data)
@@ -285,7 +316,12 @@ def update_chart_and_figure(tmp_data, k, d, base, equal_time_steps):
      Input("original-data", "children")],
     [State("editable-table", "data"),
      State("editable-table", "columns")])
-def build_editable_table(n_clicks, orig_data, current_data, current_columns):
+def build_editable_table(
+        n_clicks: int,
+        orig_data: List[dict],
+        current_data: List[dict],
+        current_columns: List[dict],
+):
     # when the app loads, use the original data
     if n_clicks == 0:
         df = pd.read_json(orig_data, convert_dates=False)
