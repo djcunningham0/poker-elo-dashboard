@@ -55,40 +55,51 @@ def header():
     ])
 
 
+def section_header(text: str):
+    return html.H4(children=text, style=center_style)
+
+
 def current_elo_tab():
     return html.Div(children=[
-        dbc.Col(children=[
-            html.Div(children=[dbc.Container(children=[
-                dbc.Row(children=[
-                    dbc.Col(width=5, children=[
-                        html.H4(children="Current Elo Ratings", style=center_style),
-                        dbc.Spinner(id="current-ratings-table")
+        dbc.Row(children=[
+            dbc.Col(width=5, children=[
+                section_header("Current Elo Ratings"),
+                dbc.Spinner(id="current-ratings-table")
+            ]),
+            dbc.Col(width=7, children=[
+                section_header("Elo History"),
+                dbc.Spinner(children=dcc.Graph(id="main-chart")),
+                dbc.Col(width=6, children=[
+                    dbc.Row(children=[
+                        daq.BooleanSwitch(id="time-step-toggle-input", on=True,
+                                          style={"margin-left": "20px", "margin-right": "10px"}),
+                        dcc.Markdown(className="text-muted",
+                                     children="use equally spaced time steps"),
+                        html.Div(id="time-step-null-output", hidden=True),
                     ]),
-                    dbc.Col(width=7, children=[
-                        html.H4(children="Elo History", style=center_style),
-                        dbc.Spinner(children=dcc.Graph(id="main-chart")),
-                        dbc.Row(children=[
-                            daq.BooleanSwitch(id="time-step-toggle-input", on=True,
-                                              style={"margin-left": "20px", "margin-right": "10px"}),
-                            dcc.Markdown(className="text-muted",
-                                         children="use equally spaced time steps"),
-                            html.Div(id="time-step-null-output", hidden=True)
-                        ])
+
+                    dbc.InputGroup(children=[
+                        dbc.InputGroupAddon("Minimum games played", addon_type="prepend"),
+                        dbc.Input(
+                            id="min-games-input",
+                            value=1,
+                            type="number",
+                            min=1,
+                            step=1,
+                        )
                     ])
                 ]),
-
-                html.Hr(),
-
-                dbc.Row(children=[
-                    dbc.Col(children=[
-                        html.H4(children="Game Results", style=center_style),
-                        dbc.Spinner(id="game-results-table")
-                    ])
-                ])
-            ])]),
+            ])
         ]),
 
         html.Hr(),
+
+        dbc.Row(children=[
+            dbc.Col(children=[
+                section_header("Game Results"),
+                dbc.Spinner(id="game-results-table")
+            ])
+        ])
     ])
 
 
@@ -146,15 +157,33 @@ def scenario_generator_tab():
             dbc.Col(id="elo-scenario-table", width=5),
             dbc.Col(width=7, children=[
                 dcc.Graph(id="elo-scenario-chart"),
-                dbc.Row(children=[
-                    daq.BooleanSwitch(id="time-step-toggle-input", on=True,
-                                      style={"margin-left": "20px", "margin-right": "10px"}),
-                    dcc.Markdown(className="text-muted",
-                                 children="use equally spaced time steps"),
-                    html.Div(id="time-step-null-output", hidden=True)
-                ])
+                dbc.Col(width=6, children=[
+                    dbc.Row(children=[
+                        daq.BooleanSwitch(id="time-step-toggle-input", on=True,
+                                          style={"margin-left": "20px", "margin-right": "10px"}),
+                        dcc.Markdown(className="text-muted",
+                                     children="use equally spaced time steps"),
+                        html.Div(id="time-step-null-output", hidden=True),
+                    ]),
+
+                    dbc.InputGroup(children=[
+                        dbc.InputGroupAddon("Minimum games played", addon_type="prepend"),
+                        dbc.Input(
+                            id="min-games-input",
+                            value=1,
+                            type="number",
+                            min=1,
+                            step=1,
+                        )
+                    ])
+                ]),
             ]),
         ])),
+
+        html.Br(),
+        html.Hr(),
+
+        section_header("Editable Game Result History"),
 
         dbc.Row(justify="center", children=[
             dbc.Col(children=[
@@ -217,9 +246,10 @@ def load_original_data(_):
 @app.callback(
     [Output(component_id="current-ratings-table", component_property="children"),
      Output(component_id="game-results-table", component_property="children")],
-    [Input(component_id="original-data", component_property="children")]
+    [Input(component_id="original-data", component_property="children"),
+     Input(component_id="min-games-input", component_property="value")]
 )
-def load_current_elo_tables(json_data):
+def load_current_elo_tables(json_data: List[dict], min_games: int):
     data = utils.load_json_data(json_data)
     tracker = utils.get_tracker(
         k_value=config.DEFAULT_K_VALUE,
@@ -232,6 +262,7 @@ def load_current_elo_tables(json_data):
     current_ratings = utils.prep_current_ratings_for_dash(
         tracker=tracker,
         results_history=results_history,
+        min_games=min_games
     )
     return (
         utils.display_current_ratings_table(current_ratings),
@@ -242,9 +273,14 @@ def load_current_elo_tables(json_data):
 @app.callback(
     Output(component_id="main-chart", component_property="figure"),
     [Input(component_id="original-data", component_property="children"),
-     Input(component_id="time-step-toggle-input", component_property="on")]
+     Input(component_id="time-step-toggle-input", component_property="on"),
+     Input(component_id="min-games-input", component_property="value")]
 )
-def load_current_elo_chart(json_data, equal_time_steps):
+def load_current_elo_chart(
+        json_data: List[dict],
+        equal_time_steps: bool,
+        min_games: int,
+):
     data = utils.load_json_data(json_data)
     tracker = utils.get_tracker(
         k_value=config.DEFAULT_K_VALUE,
@@ -256,6 +292,7 @@ def load_current_elo_chart(json_data, equal_time_steps):
     history_plot = utils.plot_tracker_history(
         tracker=tracker,
         equal_time_steps=equal_time_steps,
+        min_games=min_games,
     )
     return history_plot
 
@@ -275,7 +312,8 @@ def toggle_time_steps(value: bool) -> bool:
      Input(component_id="k-value", component_property="value"),
      Input(component_id="d-value", component_property="value"),
      Input(component_id="score-function-base", component_property="value"),
-     Input(component_id="time-step-toggle-input", component_property="on")]
+     Input(component_id="time-step-toggle-input", component_property="on"),
+     Input(component_id="min-games-input", component_property="value")]
 )
 def update_scenario_generator_chart_and_figure(
         tmp_data: List[dict],
@@ -283,6 +321,7 @@ def update_scenario_generator_chart_and_figure(
         d: float,
         base: float,
         equal_time_steps: bool,
+        min_games: int,
 ):
     # get data from editable table
     tmp_data = pd.DataFrame(tmp_data)
@@ -301,7 +340,8 @@ def update_scenario_generator_chart_and_figure(
     results_history = utils.prep_results_history_for_dash(tmp_data)
     tmp_ratings = utils.prep_current_ratings_for_dash(
         tracker=tmp_tracker,
-        results_history=results_history
+        results_history=results_history,
+        min_games=min_games
     )
 
     # get plot of Elo history
@@ -310,6 +350,7 @@ def update_scenario_generator_chart_and_figure(
         tracker=tmp_tracker,
         title=title,
         equal_time_steps=equal_time_steps,
+        min_games=min_games,
     )
 
     return utils.display_current_ratings_table(tmp_ratings), tmp_fig

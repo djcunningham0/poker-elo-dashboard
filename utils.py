@@ -71,7 +71,9 @@ def get_dash_theme(style: str) -> List[str]:
         raise AttributeError(f"could not find theme named '{style}'")
 
 
-def prep_results_history_for_dash(data: pd.DataFrame) -> pd.DataFrame:
+def prep_results_history_for_dash(
+        data: pd.DataFrame,
+) -> pd.DataFrame:
     results_history = data.copy()
     results_history = results_history.dropna(how="all", axis=1)  # drop columns if all NaN
     results_history = results_history.rename(columns={"date": "Date"})
@@ -81,6 +83,7 @@ def prep_results_history_for_dash(data: pd.DataFrame) -> pd.DataFrame:
 def prep_current_ratings_for_dash(
         tracker: Tracker,
         results_history: pd.DataFrame,
+        min_games: int = 0,
 ) -> pd.DataFrame:
     current_ratings = tracker.get_current_ratings()
     current_ratings["rating"] = current_ratings["rating"].round(2)
@@ -97,6 +100,11 @@ def prep_current_ratings_for_dash(
             "rating": "Elo Rating",
         })
     )
+
+    # only include players who have played min_games, then re-rank
+    current_ratings = current_ratings[current_ratings["Games Played"] >= min_games]
+    current_ratings["Rank"] = range(1, current_ratings.shape[0] + 1)
+
     col_order = ["Rank", "Name", "Games Played", "Wins", "Elo Rating"]
     return current_ratings[col_order]
 
@@ -113,21 +121,29 @@ def get_wins_from_history(results_history: pd.DataFrame) -> pd.DataFrame():
 
 
 def plot_tracker_history(
-    tracker: Tracker,
-    title: str = None,
-    equal_time_steps: bool = False,
+        tracker: Tracker,
+        title: str = None,
+        equal_time_steps: bool = False,
+        min_games: int = 0,
 ) -> Figure:
     """
     Create an interactive plot with the rating history of each player in the Tracker.
 
     :param tracker: tracker with Elo history for all players
     :param title: title for the plot
-    :param equal_time_steps: if True, space the x-axis equally; otherwise use the provided timestamps
+    :param equal_time_steps: if True, space the x-axis equally; otherwise use the
+    provided timestamps
+    :param min_games: minimum number of games player must have played to be included
 
     :return: a plot generated using plotly.express.line
     """
     history_df = tracker.get_history_df()
     history_df = remove_dummy_player(df=history_df)
+
+    # filter out players who haven't played min_games
+    include_players = [player.id for player in tracker.player_df["player"]
+                       if player.count_games() >= min_games]
+    history_df = history_df[history_df["player_id"].isin(include_players)]
 
     if equal_time_steps:
         date_df = history_df[["date"]].drop_duplicates().sort_values("date").reset_index(drop=True)
