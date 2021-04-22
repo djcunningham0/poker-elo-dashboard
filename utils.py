@@ -10,11 +10,13 @@ from gspread.models import Spreadsheet, Worksheet
 from plotly.graph_objs import Figure
 from typing import List
 
+import config
 
-def load_data_from_gsheet(config: dict) -> pd.DataFrame:
-    gc = set_up_gsheets_client(config["google_sheets"]["credentials_file"])
-    spreadsheet = gc.open_by_key(config["google_sheets"]["spreadsheet_id"])
-    data_sheet = get_worksheet_by_id(spreadsheet, config["google_sheets"]["data_sheet_id"])
+
+def load_data_from_gsheet() -> pd.DataFrame:
+    gc = set_up_gsheets_client(config.GSHEETS_CREDENTIALS_FILE)
+    spreadsheet = gc.open_by_key(config.SPREADSHEET_ID)
+    data_sheet = get_worksheet_by_id(spreadsheet, config.DATA_SHEET_ID)
     df = worksheet_to_dataframe(data_sheet)
     return df
 
@@ -76,15 +78,12 @@ def prep_results_history_for_dash(data: pd.DataFrame) -> pd.DataFrame:
     return results_history
 
 
-def prep_current_ratings_for_dash(
-    tracker: Tracker,
-    dummy_player_id: str = None,
-) -> pd.DataFrame:
+def prep_current_ratings_for_dash(tracker: Tracker) -> pd.DataFrame:
     current_ratings = tracker.get_current_ratings()
     current_ratings["rating"] = current_ratings["rating"].round(2)
     current_ratings = remove_dummy_player(
         df=current_ratings,
-        dummy_player_id=dummy_player_id,
+        dummy_player_id=config.DUMMY_PLAYER_NAME,
         column_name="player_id",
     )
     current_ratings = current_ratings.rename(
@@ -102,7 +101,6 @@ def plot_tracker_history(
     tracker: Tracker,
     title: str = None,
     equal_time_steps: bool = False,
-    dummy_player_id: str = None,
 ) -> Figure:
     """
     Create an interactive plot with the rating history of each player in the Tracker.
@@ -117,7 +115,7 @@ def plot_tracker_history(
     history_df = tracker.get_history_df()
     history_df = remove_dummy_player(
         df=history_df,
-        dummy_player_id=dummy_player_id,
+        dummy_player_id=config.DUMMY_PLAYER_NAME,
         column_name="player_id",
     )
 
