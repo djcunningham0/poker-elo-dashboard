@@ -8,7 +8,7 @@ from multielo import MultiElo, Tracker
 from gspread.client import Client
 from gspread.models import Spreadsheet, Worksheet
 from plotly.graph_objs import Figure
-from typing import List
+from typing import List, Union
 
 import config
 
@@ -233,3 +233,20 @@ def remove_dummy_player(
         return df
     df = df[df["player_id"] != dummy_player_id]
     return df
+
+
+def make_ordinal(n: Union[int, str]) -> str:
+    """
+    Convert an integer into its ordinal representation.
+
+    Example:
+        make_ordinal(0)   => '0th'
+        make_ordinal(3)   => '3rd'
+        make_ordinal(122) => '122nd'
+        make_ordinal(213) => '213th'
+    """
+    n = int(n)
+    suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
+    if 11 <= (n % 100) <= 13:
+        suffix = 'th'
+    return f"{n}{suffix}"
