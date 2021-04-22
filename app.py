@@ -189,7 +189,7 @@ app.layout = dbc.Container(children=[
     header(),
 
     # load the data immediately after opening (this way the app loads a bit quicker)
-    dbc.Spinner(children=[
+    html.Div(children=[
         html.Div(id="hidden-trigger", hidden=True),
         html.Div(id="original-data", hidden=True),
     ]),
@@ -228,9 +228,11 @@ def load_current_elo_tables(json_data):
         initial_rating=config.INITIAL_RATING,
         data_to_process=data,
     )
-    # TODO: add wins column
-    current_ratings = utils.prep_current_ratings_for_dash(tracker=tracker)
     results_history = utils.prep_results_history_for_dash(data)
+    current_ratings = utils.prep_current_ratings_for_dash(
+        tracker=tracker,
+        results_history=results_history,
+    )
     return (
         utils.display_current_ratings_table(current_ratings),
         utils.display_game_results_table(results_history)
@@ -296,7 +298,11 @@ def update_scenario_generator_chart_and_figure(
     )
 
     # get current ratings for table
-    tmp_ratings = utils.prep_current_ratings_for_dash(tracker=tmp_tracker)
+    results_history = utils.prep_results_history_for_dash(tmp_data)
+    tmp_ratings = utils.prep_current_ratings_for_dash(
+        tracker=tmp_tracker,
+        results_history=results_history
+    )
 
     # get plot of Elo history
     title = f"Elo history -- K={k}, D={d}, base={base}"
