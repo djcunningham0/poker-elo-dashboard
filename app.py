@@ -57,6 +57,17 @@ def header():
     ])
 
 
+def footer():
+    return html.Div([
+        html.Hr(),
+        html.Small("*We claim no affiliation with Red Dog, Miller Brewing Company, or "
+                   "Plank Road Brewing, but we would happily promote for you if you in "
+                   "exchange for free beer :)",
+                   className="text-muted font-italic"),
+        html.Hr(),
+    ])
+
+
 def section_header(text: str):
     return html.H4(children=text, style=center_style)
 
@@ -223,6 +234,7 @@ def win_probability_tab():
         ]),
     ])
 
+
 @app.callback(
     Output(component_id="tab-content", component_property="children"),
     Input(component_id="tab-name", component_property="value")
@@ -248,12 +260,14 @@ app.layout = dbc.Container(children=[
 
     dcc.Tabs(id="tab-name", value="tab-1", children=[
         dcc.Tab(label="Current Elo Ratings", value="tab-1"),
-        dcc.Tab(label='"What-If" Scenario Generator', value="tab-2"),
+        dcc.Tab(label="Scenario Generator", value="tab-2"),
         dcc.Tab(label="Win Probabilities", value="tab-3"),
     ]),
 
     html.Br(),
     html.Div(id="tab-content"),
+
+    footer(),
 
 ])
 

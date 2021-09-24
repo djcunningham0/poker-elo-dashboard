@@ -147,7 +147,7 @@ def plot_tracker_history(
 
     if equal_time_steps:
         date_df = history_df[["date"]].drop_duplicates().sort_values("date").reset_index(drop=True)
-        date_df["game number"] = date_df.index
+        date_df["game number"] = date_df.index + 1
         history_df = history_df.merge(date_df, on="date", how="inner")
         x_col = "game number"
     else:
