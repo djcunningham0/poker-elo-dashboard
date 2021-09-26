@@ -155,7 +155,13 @@ def plot_tracker_history(
 
     history_df = history_df.sort_values(["player_id", x_col]).reset_index(drop=True)
 
-    fig = px.line(history_df, x=x_col, y="rating", color="player_id")
+    fig = px.line(
+        history_df,
+        x=x_col,
+        y="rating",
+        color="player_id",
+        color_discrete_sequence=px.colors.qualitative.Plotly + px.colors.qualitative.Set2,
+    )
     fig.update_traces(mode="lines+markers")
     fig.update_layout(
         yaxis_title="Elo rating",
