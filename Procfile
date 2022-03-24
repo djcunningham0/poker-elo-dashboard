@@ -1,1 +1,1 @@
-web: gunicorn app:server
+web: pip install gunicorn badminton:server

@@ -1,44 +1,39 @@
-from google.oauth2.service_account import Credentials
-import gspread
+
 import pandas as pd
 import numpy as np
 import dash_bootstrap_components as dbc
 import plotly.express as px
-from multielo import MultiElo, Tracker
-from gspread.client import Client
-from gspread.models import Spreadsheet, Worksheet
+from multiBatelo.multielo import MultiElo
+from multiBatelo.player_tracker import Tracker
 from plotly.graph_objs import Figure
 from typing import List, Union
+
+import gspread
+
+from gspread.spreadsheet import Spreadsheet
+from gspread.worksheet import Worksheet
 
 import config
 
 
+def get_dash_theme(style: str) -> List[str]:
+    try:
+        return [getattr(dbc.themes, style)]
+    except AttributeError:
+        raise AttributeError(f"could not find theme named '{style}'")
+
 def load_data_from_gsheet() -> pd.DataFrame:
-    gc = set_up_gsheets_client(config.GSHEETS_CREDENTIALS_FILE)
+    gc = gspread.service_account(filename=config.GSHEETS_CREDENTIALS_FILE)
     spreadsheet = gc.open_by_key(config.SPREADSHEET_ID)
     data_sheet = get_worksheet_by_id(spreadsheet, config.DATA_SHEET_ID)
     df = worksheet_to_dataframe(data_sheet)
     return df
 
 
-def set_up_gsheets_client(credentials_file: str) -> Client:
-    scopes = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive",
-    ]
-
-    credentials = Credentials.from_service_account_file(
-        filename=credentials_file, scopes=scopes
-    )
-
-    client = gspread.authorize(credentials)
-
-    return client
-
-
 def get_worksheet_by_id(spreadsheet: Spreadsheet, worksheet_id: str) -> Worksheet:
     try:
-        return [w for w in spreadsheet.worksheets() if w.id == worksheet_id][0]
+        return [w for w in spreadsheet.worksheets() 
+        if w.id == worksheet_id][0]
     except IndexError:
         raise gspread.WorksheetNotFound(f"worksheet ID {worksheet_id} does not exist")
 
@@ -55,6 +50,7 @@ def worksheet_to_dataframe(worksheet: Worksheet, headers: bool = True) -> pd.Dat
     else:
         columns = [f"col{i}" for i in range(len(data[0]))]
 
+    #data = [['date', '1st', '2nd', '3rd', '4th'], ['2022-03-21', ['Satya','Ram'], 'Bala', 'Ramesh', 'Sriram'], ['2022-03-21', 'Sceenu', 'Ramesh', 'Satya', 'Sriram'], ['2022-03-28', 'Satya', 'Alfred', '_Sub_', 'Bala'], ['2022-03-28', 'Ram', 'Satya', '_Sub_', 'Sceenu']]
     df = pd.DataFrame(data, columns=columns)
     df = replace_null_string_with_nan(df)
     return df
@@ -88,6 +84,7 @@ def prep_current_ratings_for_dash(
     current_ratings = tracker.get_current_ratings()
     current_ratings["rating"] = current_ratings["rating"].round(2)
     win_df = get_wins_from_history(results_history)
+    print(win_df)
     current_ratings = (
         remove_dummy_player(df=current_ratings)
         .merge(win_df, on="player_id", how="left")
@@ -110,12 +107,15 @@ def prep_current_ratings_for_dash(
 
 
 def get_wins_from_history(results_history: pd.DataFrame) -> pd.DataFrame():
+    cut_out = pd.concat([results_history['Winner1'], results_history['Winner2']]);
+    cut_seri = pd.Series(cut_out,name='Winner1');
+    cut_frame= cut_seri.to_frame()
     return (
-        pd.DataFrame(results_history["1st"].value_counts())
+        pd.DataFrame(cut_frame["Winner1"].value_counts())
         .reset_index()
         .rename(columns={
             "index": "player_id",
-            "1st": "n_wins",
+            "Winner1": "n_wins",
         })
     )
 
@@ -241,18 +241,3 @@ def remove_dummy_player(
     return df
 
 
-def make_ordinal(n: Union[int, str]) -> str:
-    """
-    Convert an integer into its ordinal representation.
-
-    Example:
-        make_ordinal(0)   => '0th'
-        make_ordinal(3)   => '3rd'
-        make_ordinal(122) => '122nd'
-        make_ordinal(213) => '213th'
-    """
-    n = int(n)
-    suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
-    if 11 <= (n % 100) <= 13:
-        suffix = 'th'
-    return f"{n}{suffix}"
