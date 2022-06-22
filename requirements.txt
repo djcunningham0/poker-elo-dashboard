@@ -23,7 +23,7 @@ itsdangerous==1.1.0
 Jinja2==2.11.3
 MarkupSafe==1.1.1
 multielo @ git+git://github.com/djcunningham0/multielo.git@v0.2.0
-numpy==1.20.2
+numpy==1.22.0
 oauthlib==3.1.0
 pandas==1.2.4
 plotly==4.14.3
